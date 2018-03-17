@@ -64,22 +64,39 @@ def transpose_conv2d(x, out_channel, filter_size=4, stride=2, name='transpose_co
             output = activation(output)
             
         return output        
+
+# To downsize width and height when downsampling
+def _avg_pool(x, kernel=[1,2,2,1], stride=[1,2,2,1]):
+    return tf.nn.avg_pool(x, ksize=kernel, strides=stride, padding='VALID')
         
 
 def residual_block(x, out_dim, layer_index, dilation_rate=1, filter_size=3, downsample=True, name='residual'):
+    in_dim = x.get_shape().as_list()[-1]
+    if in_dim * 2 == out_dim:
+        increase_dim = True
+    else:
+        increase_dim = False
+
     dilations = [1, dilation_rate, dilation_rate, 1]
     with tf.variable_scope(name):
         # int: floor
         pad = int((filter_size - 1) / 2 * dilation_rate)
+        print(pad)
         r = tf.pad(x, [[0,0],[pad,pad],[pad,pad],[0,0]], 'SYMMETRIC')
         # Note that when using dilated convolution, stride must be 1
+        # When down sampling, [height, width, channel] -> [height/2, width/2, channel*2], so conv2 and x does not match
+        # From Resnet, we add zero pads to increase the depth
         if downsample:
-            r = op.conv2d(r, out_channel=out_dim, filter_size=filter_size, stride=2, activation=tf.nn.relu, padding='VALID', dilations=dilations,name='conv2d_%d'%layer_index)
+            x = _avg_pool(x)
+            x = tf.pad(x, [[0,0],[0,0],[0,0],[in_dim//2,in_dim//2]], 'CONSTANT')
+            r = conv2d(r, out_channel=out_dim, filter_size=filter_size, stride=2, activation=tf.nn.relu, padding='VALID', dilations=dilations, name='conv2d_%d'%layer_index)
         else:
-            r = op.conv2d(r, out_channel=out_dim, filter_size=filter_size, stride=1, activation=tf.nn.relu, padding='VALID', dilations=dilation, name='conv2d_%d'%layer_index)
+            if increase_dim:
+                x = tf.pad(x, [[0,0],[0,0],[0,0],[in_dim//2,in_dim//2]], 'CONSTANT')
+            r = conv2d(r, out_channel=out_dim, filter_size=filter_size, stride=1, activation=tf.nn.relu, padding='VALID', dilations=dilations, name='conv2d_%d'%layer_index)
         index = layer_index + 1
         r = tf.pad(r, [[0,0],[pad,pad],[pad,pad],[0,0]], 'SYMMETRIC')
-        r = op.conv2d(r, out_channel=out_dim, filter_size=filter_size, stride=1, activation=None, padidng='VALID',  dilations=dilations, name='conv2d_%d'%layer_index)
+        r = conv2d(r, out_channel=out_dim, filter_size=filter_size, stride=1, activation=None, padding='VALID',  dilations=dilations, name='conv2d_%d'%index)
         index += 1
         return tf.nn.relu(r+x), index
 
