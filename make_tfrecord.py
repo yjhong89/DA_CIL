@@ -3,6 +3,7 @@ import argparse
 import shutil
 import configparser
 import dataset_utils
+import utils
 import os
 
 def main():
@@ -11,7 +12,7 @@ def main():
     parser.add_argument('-t', '--data_type', nargs='+', default=['train', 'test'])
     parser.add_argument('-d', '--delete', action='store_true')
     parser.add_argument('-l', '--log', action='store_true')
-    parser.add_argument('--source', type=dataset_utils.str2bool, default='t', help='Whether for source')
+    parser.add_argument('--source', type=utils.str2bool, default='t', help='Whether for source')
 
     args = parser.parse_args()
     if args.log:    
@@ -21,7 +22,7 @@ def main():
     base_dir = os.getcwd()
     # Read config file
     config = configparser.ConfigParser()
-    dataset_utils.load_config(config, args.config)
+    utils.load_config(config, args.config)
 
     carla_data_dir = os.path.join(base_dir, config.get('directory', 'carla'))    
     tfrecord_dir = os.path.join(base_dir, config.get('directory', 'tfrecord'))    

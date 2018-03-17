@@ -5,23 +5,12 @@ import glob
 import numpy as np
 import sys
 
-def load_config(config, ini):
-    config_file = os.path.expanduser(ini)
-    config.read(config_file)
 
 def tfrecord_path(tfrecord_dir, whether_for_source, data_type): 
     if whether_for_source:
         return os.path.join(tfrecord_dir, 'source_' + data_type + '.tfrecord')
     else:
         return os.path.join(tfrecord_dir, 'target_' + data_type + '.tfrecord')
-
-def str2bool(v):
-    if v.lower() in ('true', 't', 'y', 'yes'):
-        return True
-    elif v.lower() in ('false', 'f', 'n', 'no'):
-        return False
-    else:
-        raise ValueError('%s is not supported' % v)
 
 def process_h5file(data_path, writer):
     tf.logging.info('Loading %s' % data_path)
