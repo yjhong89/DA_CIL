@@ -37,20 +37,48 @@ def process_h5file(data_path, writer):
             # Get image size: [height, width]: [88, 200]
             image_size = rgb_data.shape[:-1]
             # Get measures
-            s, o, t, c = _get_measure_command(lbls[i])
+            steer, acc, s, o, t, c = _get_stats(lbls[i])
+
+            max_steer, max_acc, max_speed, max_or = _check_max(steer, acc, s, o)
         
-            example = _make_tfexample(rgb_data, s, o, t, c)
+            example = _make_tfexample(rgb_data, steer, acc, s, o, t, c)
             # Write
             writer.write(example.SerializeToString())
 
     tf.logging.info('%s files has been completed into tfrecord' % data_path)
+    print('Max speed, ', max_speed)
+    print('Max_steer, ', max_steer)
+    print('Max_orientation, ', max_or)
+    print('max_acceleration, ', max_acc) 
     sys.stdout.write('\n')
     # Flush the buffer, write everything in the buffer to the terminal
     sys.stdout.flush()
 
+def _check_max(steer, acceleration, speed, orientation):
+    max_steer = 0
+    max_speed = 0
+    # x,y,z
+    max_acc = [0]*3
+    max_orientation = [0]*3
 
-def _get_measure_command(label_info):
+    if max_steer < abs(steer):
+        max_steer = abs(steer)
+    if max_speed < abs(speed):
+        max_speed = abs(speed)
+    for n, i in enumerate(zip(max_acc, max_orientation)):
+        if i[0] < abs(acceleration[n]):
+            max_acc[n] = abs(acceleration[n])
+        if i[1] < abs(orientation[n]):
+            max_orientation[n] = abs(orientation[n])
+
+    return max_steer, max_acc, max_speed, max_orientation
+
+
+def _get_stats(label_info):
     # Already numpy file
+    # Label: steering angle and acceleration
+    steering_angle = label_info[0]
+    acceleration = label_info[16:19]
     # Measure: speed, orientation, traffic_rule
     speed = label_info[10]
     # orientation_xyz
@@ -62,11 +90,13 @@ def _get_measure_command(label_info):
     # Make 0,1,2,3
     command = label_info[24] - 2
 
-    return speed, orientation, traffic_rule, command
+    return steering_angle, acceleration, speed, orientation, traffic_rule, command
 
-def _make_tfexample(image, speed, orientation, traffic_rule, command):
+def _make_tfexample(image, steering_angle, acceleration, speed, orientation, traffic_rule, command):
     return tf.train.Example(features=tf.train.Features(feature={
             'rgb_data': _bytes_features(tf.compat.as_bytes(image.tostring())),
+            'label/steer': _float_features(steering_angle),
+            'label/acc': _float_features(acceleration),
             'measures/speed': _float_features(speed),
             'measures/orientation': _float_features(orientation),
             'measures/traffic_rule': _float_features(traffic_rule), 

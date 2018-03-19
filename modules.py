@@ -6,14 +6,9 @@ import argparse
 import dataset_utils
 
 class generator(object):
-    def __init__(self, args, name='G_S_to_T'):
-        self.args = args
+    def __init__(self, args, channel, name='G_S_to_T'):
         self.name = name
-        
-        section = 'generator'
-        config = utils.MyConfigParser()
-        utils.load_config(config, 'config.ini')
-        self.channel = config.getint(section, 'channel')
+        self.channel = channel
         
     # Build model
     # From image-to-image translation
@@ -126,6 +121,100 @@ class generator(object):
 
         return tf.nn.tanh(x)
 
+
+
+class discriminator(object):
+    def __init__(self, args, channel, name='D_S_to_T'):
+        self.name = name
+        self.channel = channel
+
+    # 70x70 PatchGAN to model high frequency region
+    # why 70x70?
+        # regular GAN discriminaotr maps image to a single scalar while patchGAN maps image to an NXN array of output X
+        # X_ij signifies patch_ij in input image is real or fake. -> so 70x70 patches in input images
+        # equivalent manually chopped up the image into 70x70 patch, run a regular discriminator
+    def __call__(self, x):
+        layer_index = 0
+        with tf.variable_scope(self.name):
+            # From cycleGAN, do not use instance Norm for the first C64 layer
+            x = op.conv2d(x, out_channel=self.channel, normalization=False, name='conv2d_%d'%layer_index)
+            layer_index += 1
+            x = op.conv2d(x, out_channel=self.channel*2, name='conv2d_%d'%layer_index)
+            layer_index += 1
+            x = op.conv2d(x, out_channel=self.channel*4, name='conv2d_%d'%layer_index)
+            layer_index += 1
+            x = op.conv2d(x, out_channel=self.channel*8, name='conv2d_%d'%layer_index)
+            layer_index += 1
+            # After the last layer, a convolution is applied to map to a 1 dimensional output
+            x = op.conv2d(x, out_channel=1, stride=1, name='conv2d_%d'%layer_index)
+
+        return x
+
+class task_regression(object):
+    def __init__(self, channel, image_fc, measurement_fc, command_fc, num_command, name='task_regression'):
+        self.channel = channel
+        self.name = name
+        self.image_fc = image_fc
+        self.measurement_fc = measurement_fc
+        self.command_fc = command_fc
+        self.num_command = num_command
+
+
+    def __call__(self, image, measurements, command):
+        image_layer_index = 0
+        measurement_layer_index = 0
+        branches = list()
+
+        with tf.variable_scope(self.name):
+            with tf.variable_scope('image_module'):
+                x = op.conv2d(image, out_channel=self.channel, filter_size=5, stride=2, normalization=False, activation=tf.nn.relu, name='conv2d_%d'%image_layer_index)
+                image_layer_index += 1
+                x = op.conv2d(x, out_channel=self.channel, filter_size=3, stride=1, activation=tf.nn.relu, name='conv2d_%d'%image_layer_index)
+                image_layer_index += 1
+
+                x = op.conv2d(x, out_channel=self.channel*2, filter_size=3, stride=2, activation=tf.nn.relu, name='conv2d_%d'%image_layer_index)
+                image_layer_index += 1
+                x = op.conv2d(x, out_channel=self.channel*2, filter_size=3, stride=1, activation=tf.nn.relu, name='conv2d_%d'%image_layer_index)
+                image_layer_index += 1
+
+                x = op.conv2d(x, out_channel=self.channel*4, filter_size=3, stride=2, activation=tf.nn.relu, name='conv2d_%d'%image_layer_index)
+                image_layer_index += 1
+                x = op.conv2d(x, out_channel=self.channel*4, filter_size=3, stride=1, activation=tf.nn.relu, name='conv2d_%d'image_layer_index) 
+                image_layer_index += 1
+                x = op.conv2d(x, out_channel=self.channel*8, filter_size=3, stride=1, activation=tf.nn.relu, name='conv2d_%d'image_layer_index)
+                image_layer_index += 1
+                x = op.conv2d(x, out_channel=self.channel*8, filter_size=3, stride=1, activation=tf.nn.relu, name='conv2d_%d'image_layer_index)
+                image_layer_index += 1
+
+                x_shape = x.get_shape().as_list()
+                # Fully connected layer
+                flatten = tf.reshape(x, [-1, x_shape.prod[1:]])
+                x = op.fc(flatten, self.image_fc, name='fc_%d'%image_layer_index)
+                image_layer_index += 1
+                x = op.fc(x, self.image_fc, name='fc_%d'%image_layer_index)
+        
+
+            with tf.variable_scope('measurement_module'):
+                y = op.fc(measurements, self.measurement_fc, name='fc_%d'%measurement_layer_index)
+                measurement_layer_index += 1    
+                y = op.fc(y, self.measurement_fc, name='fc_%d'%measurement_layer_index)
+                
+            with tf.variable_scope('joint'):
+                joint = tf.concat([x,y], axis=-1, name='joint_representation')
+                joint = op.fc(joint, self.image_fc, name='fc')
+    
+            for i in len(self.num_commands):
+                branch_layer_index = 0
+                with tf.variable_scope('branch_%d'%i):
+                    branch_output = op.fc(joint, self.branch_fc, name='fc_%d'%branch_layer_index)
+                    branch_layer_index += 1
+                    branch_output = op.fc(branch_output, self.branch_fc, name='fc_%d'branch_layer_index)
+                    branch_layer_index += 1
+                    branch_output = op.fc(branch_output, len(self.num_output), name='fc_%d'branch_layer_index)
+                    branches.append(branch_output)
+    
+        return branches
+        
 
 
 if __name__ == "__main__":
