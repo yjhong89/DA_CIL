@@ -59,7 +59,7 @@ def load_data(tfrecord_dir, whether_for_source, data_type, config):
         command = tf.cast(example['command'], tf.int64, name='command')
        
     if config.getboolean('model', 'augmentation'):
-        image = augmentation(image, config)
+        image = _augmentation(image, config)
 
     image = tf.clip_by_value(image, 0, 255.0)
 
@@ -77,7 +77,7 @@ def load_data(tfrecord_dir, whether_for_source, data_type, config):
 
 
 
-def augmentation(image, config):
+def _augmentation(image, config):
     # inspect.stack get function name
     section = inspect.stack()[0][3]
     prob = config.getfloat(section, 'probability')

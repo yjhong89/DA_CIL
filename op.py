@@ -28,6 +28,22 @@ def residual(x, filter_size, stride, channel, layer_index, name='residual'):
         index += 1
         return x + residual, index
 
+def fc(x, hidden, dropout_ratio=0.5, activation=tf.nn.relu, dropout=True, name='fc'):
+    _, in_dim = x.get_shape().as_list()
+    with tf.variable_scope(name):
+        weight = tf.get_variable('weight', shape=[in_dim, hidden], initializer=tf.contrib.layers.xavier_initializer())
+        bias = tf.get_variable('bias', shape=[hidden], initializer=tf.constant_initializer(0))
+        output = tf.matmul(x, weight)
+        output = output + bias
+
+        if dropout:
+            output = tf.nn.dropout(output, dropout_ratio, name='dropout')
+        if activation:
+            output = activation(output)
+
+    return output
+
+
 def conv2d(x, out_channel, filter_size=4, stride=2, name='conv2d', activation=_leaky_relu, normalization=True, padding='SAME', dilations=[1,1,1,1]):
     _, _, _, in_channel = x.get_shape().as_list()
     with tf.variable_scope(name):

@@ -151,13 +151,14 @@ class discriminator(object):
         return x
 
 class task_regression(object):
-    def __init__(self, channel, image_fc, measurement_fc, command_fc, num_command, name='task_regression'):
+    def __init__(self, channel, image_fc, measurement_fc, command_fc, num_command, dropout, name='task_regression'):
         self.channel = channel
         self.name = name
         self.image_fc = image_fc
         self.measurement_fc = measurement_fc
         self.command_fc = command_fc
         self.num_command = num_command
+        self.dropout = dropout
 
 
     def __call__(self, image, measurements, command):
@@ -189,33 +190,31 @@ class task_regression(object):
                 x_shape = x.get_shape().as_list()
                 # Fully connected layer
                 flatten = tf.reshape(x, [-1, x_shape.prod[1:]])
-                x = op.fc(flatten, self.image_fc, name='fc_%d'%image_layer_index)
+                x = op.fc(flatten, self.image_fc, dropout_ratio=self.dropout, name='fc_%d'%image_layer_index)
                 image_layer_index += 1
-                x = op.fc(x, self.image_fc, name='fc_%d'%image_layer_index)
-        
+                x = op.fc(x, self.image_fc, dropout_ratio=self.dropout, name='fc_%d'%image_layer_index)
 
             with tf.variable_scope('measurement_module'):
-                y = op.fc(measurements, self.measurement_fc, name='fc_%d'%measurement_layer_index)
+                y = op.fc(measurements, self.measurement_fc, dropout_ratio=self.dropout, name='fc_%d'%measurement_layer_index)
                 measurement_layer_index += 1    
-                y = op.fc(y, self.measurement_fc, name='fc_%d'%measurement_layer_index)
+                y = op.fc(y, self.measurement_fc, dropout_ratio=self.dropout, name='fc_%d'%measurement_layer_index)
                 
             with tf.variable_scope('joint'):
                 joint = tf.concat([x,y], axis=-1, name='joint_representation')
-                joint = op.fc(joint, self.image_fc, name='fc')
+                joint = op.fc(joint, self.image_fc, dropout_ratio=self.dropout, name='fc')
     
             for i in len(self.num_commands):
                 branch_layer_index = 0
                 with tf.variable_scope('branch_%d'%i):
-                    branch_output = op.fc(joint, self.branch_fc, name='fc_%d'%branch_layer_index)
+                    branch_output = op.fc(joint, self.branch_fc, dropout_ratio=self.dropout, name='fc_%d'%branch_layer_index)
                     branch_layer_index += 1
-                    branch_output = op.fc(branch_output, self.branch_fc, name='fc_%d'branch_layer_index)
+                    branch_output = op.fc(branch_output, self.branch_fc, dropout_ratio=self.dropout, name='fc_%d'branch_layer_index)
                     branch_layer_index += 1
-                    branch_output = op.fc(branch_output, len(self.num_output), name='fc_%d'branch_layer_index)
+                    branch_output = op.fc(branch_output, len(self.num_output), dropout_ratio=self.dropout, name='fc_%d'branch_layer_index)
                     branches.append(branch_output)
     
         return branches
         
-
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
