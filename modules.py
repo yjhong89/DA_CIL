@@ -6,15 +6,17 @@ import argparse
 import dataset_utils
 
 class generator(object):
-    def __init__(self, args, channel, name='G_S_to_T'):
-        self.name = name
+    def __init__(self, channel):
         self.channel = channel
         
     # Build model
     # From image-to-image translation
-    def generator_unet(self, x):
+    def generator_unet(self, x, name, reuse=False):
         layer_index = 0
-        with tf.variable_scope(self.name + '_UNET'):
+        with tf.variable_scope(name + '_UNET'):
+            if reuse:
+                tf.get_variable_scope().resue_variables()
+            
             # All relus in the encoder are leaky with 0.2
             with tf.variable_scope('encoder'):
                 e1 = op.conv2d(x, out_channel=self.channel, name='conv2d_%d'%layer_index)
@@ -65,10 +67,13 @@ class generator(object):
 
 
     # Dilated Residual Networks
-    def generator_drn(self, x):
+    def generator_drn(self, x, name, reuse=False):
         layer_index = 0
         residual_index = 0
-        with tf.variable_scope(self.name+'_DRN'):
+        with tf.variable_scope(name+'_DRN'):
+            if reuse:
+                tf.get_variable_scope().reuse_variables()
+
             # image_size - fiter_size + 2*pad + 1 (when stride=1)
             x = tf.pad(x, [[0,0],[3,3],[3,3],[0,0]], 'SYMMETRIC')
             x = op.conv2d(x, out_channel=self.channel//4, filter_size=7, stride=1, activation=tf.nn.relu, padding='VALID', name='conv2d_%d'%layer_index)
@@ -124,8 +129,7 @@ class generator(object):
 
 
 class discriminator(object):
-    def __init__(self, args, channel, name='D_S_to_T'):
-        self.name = name
+    def __init__(self, channel):
         self.channel = channel
 
     # 70x70 PatchGAN to model high frequency region
@@ -133,9 +137,12 @@ class discriminator(object):
         # regular GAN discriminaotr maps image to a single scalar while patchGAN maps image to an NXN array of output X
         # X_ij signifies patch_ij in input image is real or fake. -> so 70x70 patches in input images
         # equivalent manually chopped up the image into 70x70 patch, run a regular discriminator
-    def __call__(self, x):
+    def __call__(self, x, name, reuse=False):
         layer_index = 0
-        with tf.variable_scope(self.name):
+        with tf.variable_scope(name):
+            if reuse:
+                tf.get_variable_scope().reuse_variables()
+
             # From cycleGAN, do not use instance Norm for the first C64 layer
             x = op.conv2d(x, out_channel=self.channel, normalization=False, name='conv2d_%d'%layer_index)
             layer_index += 1
@@ -151,17 +158,17 @@ class discriminator(object):
         return x
 
 class task_regression(object):
-    def __init__(self, channel, image_fc, measurement_fc, command_fc, num_command, dropout, name='task_regression'):
+    def __init__(self, channel, image_fc, measurement_fc, command_fc, dropout, name='task_regression'):
         self.channel = channel
         self.name = name
         self.image_fc = image_fc
         self.measurement_fc = measurement_fc
         self.command_fc = command_fc
-        self.num_command = num_command
+        self.num_command = 4
         self.dropout = dropout
 
 
-    def __call__(self, image, measurements, command):
+    def __call__(self, image, measurements):
         image_layer_index = 0
         measurement_layer_index = 0
         branches = list()
