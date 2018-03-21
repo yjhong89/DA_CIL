@@ -24,8 +24,8 @@ def main():
     config = configparser.ConfigParser()
     utils.load_config(config, args.config)
 
-    carla_data_dir = os.path.join(base_dir, config.get('directory', 'carla'))    
-    tfrecord_dir = os.path.join(base_dir, config.get('directory', 'tfrecord'))    
+    carla_data_dir = os.path.join(base_dir, config.get('config', 'carla'))    
+    tfrecord_dir = os.path.join(base_dir, config.get('config', 'tfrecord'))    
     
     if args.delete:
         tf.logging.warn('Delete existing tfrecord files')
@@ -38,7 +38,7 @@ def main():
         tf.logging.info('Writing %s.tfrecord file' % t)
 
         with tf.python_io.TFRecordWriter(tfrecord_path) as writer:
-            data_path = os.path.join(carla_data_dir, config.get('directory', t))
+            data_path = os.path.join(carla_data_dir, config.get('config', t))
             if not os.path.exists(data_path):
                 raise Exception('No %s directory' % data_path)
             
