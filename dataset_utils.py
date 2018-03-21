@@ -87,10 +87,20 @@ def _get_stats(label_info):
     traffic_rule = label_info[14:15]
 
     # command: (2, follow lane), (3, left), (4, right), (5, straight)
-    # Make 0,1,2,3
-    command = label_info[24] - 2
+    command = int(label_info[24])
+    command = _get_one_hot(command)
 
     return steering_angle, acceleration, speed, orientation, traffic_rule, command
+
+def _get_one_hot(command):
+    if not isinstance(command, int):
+        command = int(command)
+
+    one_hot = np.zeros([4,])
+    one_hot[command] = 1
+
+    return ont_hot
+
 
 def _make_tfexample(image, steering_angle, acceleration, speed, orientation, traffic_rule, command):
     return tf.train.Example(features=tf.train.Features(feature={
@@ -100,12 +110,14 @@ def _make_tfexample(image, steering_angle, acceleration, speed, orientation, tra
             'measures/speed': _float_features(speed),
             'measures/orientation': _float_features(orientation),
             'measures/traffic_rule': _float_features(traffic_rule), 
-            'command': _int64_features(int(command))
+            'command': _bytes_features(tf.compat.as_bytes(command.tostring()))
             }))
 
 def _bytes_features(value):
+    if not isinstance(value, (tuple, list, np.ndarray)):
+        value = [value]
     # value: string
-    return tf.train.Feature(bytes_list=tf.train.BytesList(value=[value]))
+    return tf.train.Feature(bytes_list=tf.train.BytesList(value=value))
 
 def _int64_features(value):
     # value: a integer scalar or list of integer scalar values

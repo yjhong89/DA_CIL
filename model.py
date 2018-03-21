@@ -21,37 +21,42 @@ class model():
 
         self.generator = modules.generator(generator_channel)
         self.discriminator = modules.discriminator(discriminator(channel)
+        # List of 4 branch modules
         self.regression = modules.task_regression(regression_channel, image_fc, measurement_fc, command_fc, dropout) 
+
+        self.acc_hparam = config.getfloat('model', 'acc_hparam')
+        self.regression_hparam = config.getfloat('model', 'regression_hparam')
+        self.cyclic_hparam = config.getfloat('model', 'cyclic_hparam') 
         
-        self.end_point = dict()
+        self.summary = dict()
 
 
     # Build model
     def __call__(self, source, target, measurements):
         with tf.name_scope('generator'):
-            self.end_point['source_image'] = source
-            self.end_point['target_image'] = target
+            self.summary['source_image'] = source
+            self.summary['target_image'] = target
             if generator_type == 'DRN':
                 self.g_s2t = self.generator.generator_drn(source, name='G_S2T')
                 # [batch, height, width, 3]
-                self.end_point['source_transferred'] = self.g_s2t                
+                self.summary['source_transferred'] = self.g_s2t                
                 self.g_t2s = self.generator.generator_drn(target, name='G_T2S')
-                self.end_point['target_transferred'] = self.g_t2s
+                self.summary['target_transferred'] = self.g_t2s
 
                 self.s2t2s = self.generator.generator_drn(self.g_s2t, reuse=True, name='G_T2S')
-                self.end_point['back2source'] = self.s2t2s
+                self.summary['back2source'] = self.s2t2s
                 self.t2s2t = self.generator.generator_drn(self.g_t2s, reuse=True, name='G_S2T')
-                self.end_point['back2target'] = self.t2s2t
+                self.summary['back2target'] = self.t2s2t
             elif generator_type == 'UNET':
                 self.g_s2t = self.generator.generator_unet(fake_image, name='G_S2T')
-                self.end_point['source_transferred'] = self.g_s2t
+                self.summary['source_transferred'] = self.g_s2t
                 self.g_t2s = self.generator.generator_unet(real_image, name='G_T2S')    
-                self.end_point['target_transferred'] = self.g_t2s
+                self.summary['target_transferred'] = self.g_t2s
 
                 self.s2t2s = self.generator.generator_unet(source, reuse=True, name='G_T2S')
-                self.end_point['back2source'] = self.s2t2s
+                self.summary['back2source'] = self.s2t2s
                 self.t2s2t = self.generator.generator_unet(target, reuse=True, name='G_S2T') 
-                self.end_point['back2target'] = selef.t2s2t
+                self.summary['back2target'] = selef.t2s2t
             else:
                 raise Exception('Not supported type')
 
@@ -68,9 +73,10 @@ class model():
 
     def create_objective(self, steer, acceleration):
         with tf.name_scope('cyclic'):
-            self.s2t_cyclic_loss = tf.reduce_mean(tf.abs(self.end_point['source_image'] - self.s2t2s))
-            self.t2s_cyclic_loss = tf.reduce_mean(tf.abs(self.end_point['target_image'] - self.t2s2t))
-            self.end_point['cyclic_loss'] = self.s2t_cyclic_loss + self.t2s_cyclic_loss
+            s2t_cyclic_loss = tf.reduce_mean(tf.abs(self.summary['source_image'] - self.s2t2s))
+            t2s_cyclic_loss = tf.reduce_mean(tf.abs(self.summary['target_image'] - self.t2s2t))
+            self.cyclic_loss = s2t_cyclic_loss + t2s_cyclic_loss
+            self.summary['cyclic_loss'] = self.cyclic_loss
         
         # Wasserstein with gradient-penalty
         with tf.name_scope('adversarial'):
@@ -92,17 +98,31 @@ class model():
             s2t_d_fake_loss = tf.reduce_mean(self.s2t_fake)
             s2t_gp = gp(self.target_real, self.s2t_fake, name='D_S2T')
             self.s2t_d_loss = s2t_d_fake_loss - s2t_d_real_loss + self.args.gp_lambda * s2t_gp
-            self.end_point['s2t_d_loss'] = self.s2t_d_loss
+            self.summary['s2t_d_loss'] = self.s2t_d_loss
            
             self.t2s_g_loss = -tf.reduce_mean(self.t2s_fake)
             t2s_d_real_loss = tf.reduce_mean(self.source_real)
             t2s_d_fake_loss = tf.reduce_mean(self.t2s_fake)
             t2s_gp = gp(self.source_real, self.t2s_fake, name='D_T2S')
             self.t2s_d_loss = t2s_d_fake_loss - t2s_d_real_loss + self.args.gp_lambda * t2s_gp
-            self.end_point['t2s_d_loss'] = self.t2s_d_loss
+            self.summary['t2s_d_loss'] = self.t2s_d_loss
 
         with tf.name_scope('task'):
-            # stats = steer, speed, acc
-            
+            # steer, acc_x, acc_y, acc_z
+            # Steer: [batch, 1], acc: [batch, 3]
+            regression_output_list = list()
+            for branch in range(len(self.regression)):
+                steer_output = tf.square(self.regression[branch][:,:1] - steer)
+                acc_output = self.acc_hparam * tf.square(self.regression[branch][:,1:] - acceleration)
+                regression_output = tf.reduce_sum(tf.concat([steer_output, acc_output], axis=-1), axis=-1)
+                regression_output_list.append(regression_output)
+                
+            # [batch, 4]:, 4 represent 4 branch regression output
+            regression = tf.stack(regression_output_list, axis=-1)
 
+            # One-hot encoded command
+            self.command = tf.placeholder(tf.int32, [self.args.batch_size, 4], name='command')
+            # Mask with command
+            self.regression_loss = tf.reduce_mean(self.command * regression)
+            self.summary['regression_loss'] = self.regression_loss
         

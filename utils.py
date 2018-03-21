@@ -56,12 +56,13 @@ def load_data(tfrecord_dir, whether_for_source, data_type, config):
         speed = tf.cast(example['measures/speed'], tf.float32, name='speed')
         orientation = tf.cast(example['measures/orientation'], tf.float32, name='orientation')
         traffic_rule = tf.cast(example['measures/traffic_rule'], tf.float32, name='traffic_rule')
-        command = tf.cast(example['command'], tf.int64, name='command')
+        command = tf.decode_raw(example['command'], tf.int64, name='command')
        
     if config.getboolean('model', 'augmentation'):
         image = _augmentation(image, config)
 
     image = tf.clip_by_value(image, 0, 255.0)
+    command = tf.one_hot
 
     # Normalize with the maximum value
     normalized_steer, normalized_acc, normalized_speed = tf.py_func(stats_normalize, [steer, acc, speed], [tf.float32]*3)
@@ -71,7 +72,7 @@ def load_data(tfrecord_dir, whether_for_source, data_type, config):
         normalized_speed = tf.reshape(normalized_speed, [1])
         normalized_acc = tf.reshape(normalized_acc, [3])
 
-    stats = (normalized_steer, normalized_speed, normalized_acc)
+    stats = (normalized_steer, normalized_acc, normalized_speed)
 
     return image, stats, command
 
@@ -82,6 +83,8 @@ def _augmentation(image, config):
     section = inspect.stack()[0][3]
     prob = config.getfloat(section, 'probability')
     with tf.name_scope(section):
+        # Based on HSV, (Hue, Saturation, Value)
+            # Hue: color, Saturation: intensity of color, Value: brightness of color
         # Saturation is the intensity of a color, determines the strength of a particular color
         # Make color look richer, more vivid
         if config.getboolean(section, 'random_saturation'):
