@@ -97,9 +97,9 @@ def _get_one_hot(command):
         command = int(command)
 
     one_hot = np.zeros([4,])
-    one_hot[command] = 1
+    one_hot[command-2] = 1
 
-    return ont_hot
+    return one_hot
 
 
 def _make_tfexample(image, steering_angle, acceleration, speed, orientation, traffic_rule, command):
