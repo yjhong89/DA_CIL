@@ -34,7 +34,7 @@ def _gradient_clip(name, optimizer, loss, clip_norm=5.0):
     optim = optimizer.apply_gradients(zip(grads, var))
     return optim
 
-def train(sess, args, config, mode):
+def train(sess, args, config):
     base_dir = os.path.expanduser(config.get('config', 'basedir'))
     tfrecord_dir = os.path.join(base_dir, config.get('config', 'tfrecord'))
     log_dir = os.path.join(log_dir, config.get('config', 'logdir'))
@@ -56,17 +56,18 @@ def train(sess, args, config, mode):
     writer = tf.summary.FileWriter(log_dir, sess.graph)
     global_step = tf.contrib.framework.get_or_create_global_step()
 
-    with tf.name_scope('batches'):
-        source_image_batch, source_label_batch, source_command_batch = dataset_factory.get_batches(tfrecord_dir, whether_for_source=True, data_type=args.data_type, config=config)
-        target_image_batch, _, _ = dataset_factpry.get_batches(tfrecord_dir, whether_for_source=False, data_type=args.data_type, config=config)
-
-    da_model(source_image_batch, target_image_batch, source_label_batch[2])
-   
-    with tf.name_scope('objectives'):
-        da_model.create_objective(source_label_batch[0], source_label_batch[1])
-        generator_loss = da_model.g_step_loss()
-        
-        discriminator_loss = da_model.d_step_loss()   
+    if model_path == 'da_cil':
+        with tf.name_scope(model_path + '_batches'):
+            source_image_batch, source_label_batch, source_command_batch = dataset_factory.get_batches(tfrecord_dir, whether_for_source=True, data_type=args.data_type, config=config)
+            target_image_batch, _, _ = dataset_factpry.get_batches(tfrecord_dir, whether_for_source=False, data_type=args.data_type, config=config)
+    
+        da_model(source_image_batch, target_image_batch, source_label_batch[2])
+       
+        with tf.name_scope(model_path + '_objectives'):
+            da_model.create_objective(source_label_batch[0], source_label_batch[1])
+            generator_loss = da_model.g_step_loss()
+            
+            discriminator_loss = da_model.d_step_loss()   
 
     with tf.name_scope('optimizer'):
         if args.lr_decay:

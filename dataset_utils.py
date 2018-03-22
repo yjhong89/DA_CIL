@@ -4,7 +4,7 @@ import os
 import glob
 import numpy as np
 import sys
-
+import tf.contrib.slim as slim
 
 def tfrecord_path(tfrecord_dir, whether_for_source, data_type): 
     if whether_for_source:
@@ -183,8 +183,6 @@ def load_data(tfrecord_dir, whether_for_source, data_type, config):
 
     return image, labels, command
 
-
-
 def _augmentation(image, config):
     # inspect.stack get function name
     section = inspect.stack()[0][3]
@@ -226,4 +224,44 @@ def _augmentation(image, config):
 
     return image
 
-def get_batches
+def get_batches(dataset_name, split_name, tfrecord_dir, batch_size):
+    tfrecord_path = os.path.join(os.getcwd(), tfrecord_dir, '%s_%s' % (dataset_name, split_name))
+    if not isinstance(tfrecord_path, (tuple, list)):
+        tfrecord_path = [tfrecord_path]
+
+    num_examples = sum(sum(1 for _ in tf.python_io.tf_Record_iterator(path)) for path in tfrecord_path)
+    tf.logging.info('%d examples' % num_examples)
+
+    with tf.name_scope('read_tfrecord'):
+        reader = tf.TFRecordReader()
+        file_queue = tf.train.string_input_producer(tfrecord_path)
+        _, serialzied_example = reader.read(file_queue)
+
+        kyes_to_features = {
+            'image/encoded': tf.FixedLenFeature([], tf.string),
+            'image/class/label': tf.FixedLenFeature([1], tf.int64) } 
+
+        example = tf.parse_single_example(serialized_example, features=keys_to_features)
+
+    with tf.name_scope('decode'):
+        image = tf.decode_raw(example['image/encoded'], tf.float32)
+        label = tf.cast(example['image/class/label'], tf.int64)
+
+        # Reshape image to original shape
+        # source image include mask in channel 4
+        if dataset_name == 'source':
+            image = tf.reshape(image, (360, 640, 4)) 
+        elif dataset_name == 'target':
+            image = tf.reshape(image, (90, 160, 3))
+
+        # per_sample_normalization
+        image = tf.image.per_image_standardization(image)
+        image_batch, label_batch = tf.train.shuffle_batch([image, labels], batch_size=batch_size, 
+                capacity=batch_size*10, num_threads=10, min_after_dequeue=batch_size*2)
+        image_batch = tf.image.resize_image(image_batch, [180, 320])
+        label_batch = slim.one_hot_encoding(label_batch, 9)
+
+    return image_batch, label_batch
+
+        
+
