@@ -34,13 +34,13 @@ def _gradient_clip(name, optimizer, loss, clip_norm=5.0):
     optim = optimizer.apply_gradients(zip(grads, var))
     return optim
 
-def train(sess, args, config):
+def train(sess, args, config, mode):
     base_dir = os.path.expanduser(config.get('config', 'basedir'))
     tfrecord_dir = os.path.join(base_dir, config.get('config', 'tfrecord'))
     log_dir = os.path.join(log_dir, config.get('config', 'logdir'))
 
-    cyclic_hparam = config.getfloat('model', 'cyclic_hparam')
-    regression_hparam = config.getfloat('model', 'regression_hparam')
+    cyclic_weight = config.getfloat('model', 'cyclic_weight')
+    regression_hparam = config.getfloat('model', 'regression_weight')
 
     if args.delete:
         shutil.rmtree(log_dir)

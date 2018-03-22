@@ -170,7 +170,6 @@ def load_data(tfrecord_dir, whether_for_source, data_type, config):
         image = _augmentation(image, config)
 
     image = tf.clip_by_value(image, 0, 255.0)
-    command = tf.one_hot
 
     # Normalize with the maximum value
     normalized_steer, normalized_acc, normalized_speed = tf.py_func(stats_normalize, [steer, acc, speed], [tf.float32]*3)
@@ -227,4 +226,4 @@ def _augmentation(image, config):
 
     return image
 
-
+def get_batches

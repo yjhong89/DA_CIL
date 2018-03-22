@@ -24,7 +24,7 @@ class model():
         # List of 4 branch modules
         self.regression = modules.task_regression(regression_channel, image_fc, measurement_fc, command_fc, dropout) 
 
-        self.acc_hparam = config.getfloat(model_name, 'acc_hparam')
+        self.acc_weight = config.getfloat(model_name, 'acc_weight')
         self.adversarial_hparam = config.getfloat(model_name, 'adversarial_hparam')
         self.regression_hparam = config.getfloat(model_name, 'regression_hparam')
         self.cyclic_hparam = config.getfloat(model_name, 'cyclic_hparam')
@@ -90,10 +90,10 @@ class model():
             self.summary['t2s_d_loss'] = self.t2s_d_loss            
 
         with tf.name_scope('task'):
-            self.regression_loss = losses.task_regression_loss(steer, acceleration, command, self.end)
+            self.regression_loss = losses.task_regression_loss(steer, acceleration, command, self.end, self.acc_weight)
             self.summary['regression_loss'] = self.regression_loss
             if self.t2s_task:
-                self.t2s_regression_loss = losses.task_regression_loss(steer, acceleration, command, self.t2s_end)
+                self.t2s_regression_loss = losses.task_regression_loss(steer, acceleration, command, self.t2s_end, self.acc_weight)
                 self.summary['t2s_regression_loss'] = self.t2s_regression_loss
 
 

@@ -14,15 +14,15 @@ class model():
         generator_type = config.get('generator', 'type')
         generator_channel = config.getint('generator', 'channel')
         classifier_channel = config.getint('classifier', 'channel')
-        dropout = config.getfloat('classifier', 'dropout')
+        #   dropout = config.getfloat('classifier', 'dropout')
 
         self.generator = modules.generator(generator_channel)
         self.discriminator = modules.discriminator(discriminator(channel)
         
         self.transferred_classifier = modules.task_classifier(classifier_channel, num_classes=3, training=self.args.training) 
 
-        self.transferred_task_hparam = config.getfloat(model_name, 'transferred_task_hparam')
-        self.t2s_task_hparam = config.getfloat(model_name, 't2s_task_hparam')
+        self.transferred_task_weight = config.getfloat(model_name, 'transferred_task_weight')
+        self.t2s_task_weight = config.getfloat(model_name, 't2s_task_weight')
 
         self.summary = dict()
 
@@ -84,10 +84,10 @@ class model():
             self.summary['t2s_d_loss'] = self.t2s_d_loss            
 
         with tf.name_scope('task'):
-            self.transferred_task_loss = losses.task_classifier_loss(head_labels, lateral_labels, self.head_logits, self.lateral_logits, weight=self.transferred_task_hparam)
+            self.transferred_task_loss = losses.task_classifier_loss(head_labels, lateral_labels, self.head_logits, self.lateral_logits, weight=self.transferred_task_weight)
             self.summary['transferred_task_loss'] = self.transferred_task_loss
             if self.args.t2s_task:
-                self.t2s_task_loss = losses.task_classifier_loss(head_labels, lateral_labels, self.t2s_head_logits, self.t2s_lateral_logits, weight=self.t2s_task_hparam)
+                self.t2s_task_loss = losses.task_classifier_loss(head_labels, lateral_labels, self.t2s_head_logits, self.t2s_lateral_logits, weight=self.t2s_task_weight)
                 self.summary['self.t2s_task_loss'] = self.t2s_task_loss
        
 
