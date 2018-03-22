@@ -175,13 +175,16 @@ class task_regression(object):
         self.module_name = 'disciminator'
 
 
-    def __call__(self, image, measurements):
+    def __call__(self, image, measurements, reuse=False):
         image_layer_index = 0
         measurement_layer_index = 0
         branches = list()
         
         with tf.variable_scope(self.module_name):
             with tf.variable_scope(self.name):
+                if reuse:
+                    tf.get_variable_scope().reuse_variables()
+
                 with tf.variable_scope('image_module'):
                     x = op.conv2d(image, out_channel=self.channel, filter_size=5, stride=2, normalization=False, activation=tf.nn.relu, name='conv2d_%d'%image_layer_index)
                     image_layer_index += 1

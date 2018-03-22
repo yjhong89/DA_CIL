@@ -64,11 +64,9 @@ def train(sess, args, config):
    
     with tf.name_scope('objectives'):
         da_model.create_objective(source_label_batch[0], source_label_batch[1])
-        generator_loss = da_model.s2t_g_loss + da_model.t2s_g_loss + cyclic_hparam * da_model.cyclic_loss
-        da_model.summary['generator_loss'] = generator_loss
-        discriminator_loss = da_model.s2t_d_loss + da_model.t2s_d_loss + regression_hparam * da_model.regression_loss
-        da_model.summary['discriminator_loss'] = discriminator_loss   
-     
+        generator_loss = da_model.g_step_loss()
+        
+        discriminator_loss = da_model.d_step_loss()   
 
     with tf.name_scope('optimizer'):
         if args.lr_decay:
@@ -83,7 +81,7 @@ def train(sess, args, config):
         d_optim = _gradient_clip(name='discriminator', optimizer=optimizer, loss=disicriminator_loss, clip_norm=args.clip_norm)
        
  
-    image_summary, generator_summary, discriminator_summary = utils.summarize(da_model.summary) 
+    generator_summary, discriminator_summary = utils.summarize(da_model.summary) 
     utils.config_summary(log_dir, config)
 
     coord = tf.train.Coordinator()
@@ -98,9 +96,8 @@ def train(sess, args, config):
                 tf.logging.info('Step: %d: Discriminator loss=%.5f', steps, loss)
 
             for gen_iter in range(config.getint('model', 'generator_step')):
-                loss, steps, gen_sum, image_sum = sess.run([g_optim, global_step, generator_summary, image_summary])
+                loss, steps, gen_sum = sess.run([g_optim, global_step, generator_summary])
                 writer.add_summary(gen_sum, steps)
-                writer.add_summary(image_sum, steps)
                 tf.logging.info('Step: %d: Generator loss=%.5f', steps, loss)
         
     except tf.errors.OutOfRangeError:
