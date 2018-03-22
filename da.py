@@ -9,32 +9,26 @@ class model():
     def __init__(self, args, config):
         self.args = args
 
-        model_name = config.get('config', 'experiment')
+        model_name = config.get('config', 'experiment') 
         discriminator_channel = config.getint('discriminator', 'channel')
         generator_type = config.get('generator', 'type')
         generator_channel = config.getint('generator', 'channel')
-        regression_channel = config.getint('regression', 'channel')
-        image_fc = config.getint('regression', 'image_fc')
-        measurement_fc = config.getint('regression', 'measurement_fc')
-        command_fc = config.getint('regression', 'command_fc')
-        dropout = config.getfloat('regression', 'dropout')
+        classifier_channel = config.getint('classifier', 'channel')
+        dropout = config.getfloat('classifier', 'dropout')
 
         self.generator = modules.generator(generator_channel)
         self.discriminator = modules.discriminator(discriminator(channel)
-        # List of 4 branch modules
-        self.regression = modules.task_regression(regression_channel, image_fc, measurement_fc, command_fc, dropout) 
-
-        self.acc_hparam = config.getfloat(model_name, 'acc_hparam')
-        self.adversarial_hparam = config.getfloat(model_name, 'adversarial_hparam')
-        self.regression_hparam = config.getfloat(model_name, 'regression_hparam')
-        self.cyclic_hparam = config.getfloat(model_name, 'cyclic_hparam')
-        self.t2s_regression_hparam = config.getfloat(model_name, 't2s_regression')
         
+        self.transferred_classifier = modules.task_classifier(classifier_channel, num_classes=3, training=self.args.training) 
+
+        self.transferred_task_hparam = config.getfloat(model_name, 'transferred_task_hparam')
+        self.t2s_task_hparam = config.getfloat(model_name, 't2s_task_hparam')
+
         self.summary = dict()
 
 
     # Build model
-    def __call__(self, source, target, measurements):
+    def __call__(self, source, target):
         with tf.name_scope('generator'):
             self.summary['source_image'] = source
             self.summary['target_image'] = target
@@ -70,12 +64,12 @@ class model():
             self.target_real = self.discriminator(target, reuse=True, name='D_S2T')
             self.source_real = self.discriminator(source, reuse=True, name='D_T2S')
 
-        with tf.name_scope('regression'):
-            self.end = self.regression(self.g_s2t, measurements)  
-            if self.args.t2s_regression:
-                self.t2s_end = self.regression(self.g_t2s, measurements, reuse=True)
+        with tf.name_scope('classifier'):
+            self.head_logits, self.lateral_logits = self.transferred_classifier(self.g_s2t, reuse_private=False, reuse_shared=False, shared='transferred_shared', private='transferred_shared')  
+            if self.t2s_task:
+                self.t2s_head_logits, self.t2s_lateral_logits = self.transferred_classifier(self.g_t2s, reuse_private=False, reuse_shared=True, shared='transferred_shared', private='t2s_private')
 
-    def create_objective(self, steer, acceleration, command):
+    def create_objective(self, head_labels, lateral_labels):
         self.command = command
         with tf.name_scope('cyclic'):
             self.s2t_cyclic_loss = losses.cyclic_loss(self.summary['source_image'], self.s2t2s)
@@ -90,11 +84,10 @@ class model():
             self.summary['t2s_d_loss'] = self.t2s_d_loss            
 
         with tf.name_scope('task'):
-            self.regression_loss = losses.task_regression_loss(steer, acceleration, command, self.end)
-            self.summary['regression_loss'] = self.regression_loss
-            if self.t2s_task:
-                self.t2s_regression_loss = losses.task_regression_loss(steer, acceleration, command, self.t2s_end)
-                self.summary['t2s_regression_loss'] = self.t2s_regression_loss
+            self.transferred_task_loss = losses.task_classifier_loss(head_labels, lateral_labels, self.head_logits, self.lateral_logits, weight=self.transferred_task_hparam)
+            self.summary['transferred_task_loss'] = self.transferred_task_loss
+            if self.args.t2s_task:
+                self.t2s_task_loss = losses.task_classifier_loss(head_labels, lateral_labels, self.t2s_head_logits, self.t2s_lateral_logits, weight=self.t2s_task_hparam)
+                self.summary['self.t2s_task_loss'] = self.t2s_task_loss
+       
 
-
-        

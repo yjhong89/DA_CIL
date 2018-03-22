@@ -234,22 +234,19 @@ class task_regression(object):
         return branches
         
 class task_classifier(object):
-    def __init__(self, channel, reuse_private, reuse_shared, num_classes, training=True):
+    def __init__(self, channel, num_classes, training=True):
         self.channel = channel
-        # Last layers in the classifier
-        self.reuse_private = reuse_private
-        # First few layers in the classifier
-        self.reuse_shared = reues_shared
         self.num_classes = num_classes
         self.training = training
         
         self.module_name = 'discriminator'
         
     # Based on dilated Residual Network and Unsupervised pixel-lelvel domain adaptation
-    def __call__(self, image, shared='shared', private='private_task'):
+    def __call__(self, image, reuse_private=False, reuse_shared=False, shared='shared', private='private_task'):
         layer_index = 0
         with tf.variable_scope(self.module_name):
-            with tf.variable_scope(shared, reuse=self.reuse_shared):
+            # First few layers in the classifier
+            with tf.variable_scope(private, reuse=reuse_private):
                 # image_size - fiter_size + 2*pad + 1 (when stride=1)
                 x = tf.pad(image, [[0,0],[3,3],[3,3],[0,0]], 'SYMMETRIC')
                 x = op.conv2d(x, out_channel=self.channel//4, filter_size=7, stride=1, activation=tf.nn.relu, padding='VALID', normalization=op._batch_norm, name='conv2d_%d'%layer_index, training=self.training)
@@ -268,7 +265,8 @@ class task_classifier(object):
                 x, layer_index = op.residual_block(x, out_dim=self.channel*2, layer_index=layer_index, downsample=False, name='residual_%d'%residual_index, training=self.training)
                 residual_index += 1
     
-            with tf.variable_scope(private, reuse=self.reuse_private):
+            # Last layers in the classifier
+            with tf.variable_scope(share, reuse=reuse_share):
                 x, layer_index = op.residual_block(x, out_dim=self.channel*4, dilation_rate=2, layer_index=layer_index, downsample=False, name='residual_%d'%residual_index, training=self.training)
                 residual_index += 1
                 x, layer_index = op.residual_block(x, out_dim=self.channel*4, dilation_rate=2, layer_index=layer_index, downsample=False, name='residual_%d'%residual_index, training=self.training)
@@ -292,8 +290,8 @@ class task_classifier(object):
                 # Global average pooling for classification output
                 x = op.global_average_pooling(x)
 
-                head_logits = op.fc(x, self.num_classes, activation=None, name='head')
-                lateral_logits = op.fc(x, self.num_classes, activation=None, name='latera')
+                head_logits = op.fc(x, self.num_classes, dropout=False, activation=None, name='head')
+                lateral_logits = op.fc(x, self.num_classes, dropout=False, activation=None, name='latera')
 
         return head_logits, lateral_logits
 
