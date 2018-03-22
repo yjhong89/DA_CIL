@@ -79,12 +79,12 @@ class generator(object):
     
                 # image_size - fiter_size + 2*pad + 1 (when stride=1)
                 x = tf.pad(x, [[0,0],[3,3],[3,3],[0,0]], 'SYMMETRIC')
-                x = op.conv2d(x, out_channel=self.channel//4, filter_size=7, stride=1, activation=tf.nn.relu, padding='VALID', name='conv2d_%d'%layer_index)
+                x = op.conv2d(x, out_channel=int(self.channel//4), filter_size=7, stride=1, activation=tf.nn.relu, padding='VALID', name='conv2d_%d'%layer_index)
                 layer_index += 1
-                x, layer_index = op.residual_block(x, out_dim=self.channel//4, layer_index=layer_index, downsample=False, name='residual_%d'%residual_index)
+                x, layer_index = op.residual_block(x, out_dim=int(self.channel//4), layer_index=layer_index, downsample=False, name='residual_%d'%residual_index)
                 residual_index += 1
     
-                x, layer_index = op.residual_block(x, out_dim=self.channel//2, layer_index=layer_index, downsample=True, name='residual_%d'%residual_index)
+                x, layer_index = op.residual_block(x, out_dim=int(self.channel//2), layer_index=layer_index, downsample=True, name='residual_%d'%residual_index)
                 residual_index += 1
                  
                 x, layer_index = op.residual_block(x, out_dim=self.channel, layer_index=layer_index, downsample=True, name='residual_%d'%residual_index)
@@ -198,11 +198,11 @@ class task_regression(object):
     
                     x = op.conv2d(x, out_channel=self.channel*4, filter_size=3, stride=2, activation=tf.nn.relu, name='conv2d_%d'%image_layer_index)
                     image_layer_index += 1
-                    x = op.conv2d(x, out_channel=self.channel*4, filter_size=3, stride=1, activation=tf.nn.relu, name='conv2d_%d'image_layer_index) 
+                    x = op.conv2d(x, out_channel=self.channel*4, filter_size=3, stride=1, activation=tf.nn.relu, name='conv2d_%d'%image_layer_index) 
                     image_layer_index += 1
-                    x = op.conv2d(x, out_channel=self.channel*8, filter_size=3, stride=1, activation=tf.nn.relu, name='conv2d_%d'image_layer_index)
+                    x = op.conv2d(x, out_channel=self.channel*8, filter_size=3, stride=1, activation=tf.nn.relu, name='conv2d_%d'%image_layer_index)
                     image_layer_index += 1
-                    x = op.conv2d(x, out_channel=self.channel*8, filter_size=3, stride=1, activation=tf.nn.relu, name='conv2d_%d'image_layer_index)
+                    x = op.conv2d(x, out_channel=self.channel*8, filter_size=3, stride=1, activation=tf.nn.relu, name='conv2d_%d'%image_layer_index)
                     image_layer_index += 1
     
                     x_shape = x.get_shape().as_list()
@@ -226,21 +226,83 @@ class task_regression(object):
                     with tf.variable_scope('branch_%d'%i):
                         branch_output = op.fc(joint, self.branch_fc, dropout_ratio=self.dropout, name='fc_%d'%branch_layer_index)
                         branch_layer_index += 1
-                        branch_output = op.fc(branch_output, self.branch_fc, dropout_ratio=self.dropout, name='fc_%d'branch_layer_index)
+                        branch_output = op.fc(branch_output, self.branch_fc, dropout_ratio=self.dropout, name='fc_%d'%branch_layer_index)
                         branch_layer_index += 1
-                        branch_output = op.fc(branch_output, len(self.num_output), dropout_ratio=self.dropout, name='fc_%d'branch_layer_index)
+                        branch_output = op.fc(branch_output, len(self.num_output), dropout_ratio=self.dropout, name='fc_%d'%branch_layer_index)
                         branches.append(branch_output)
     
         return branches
         
+class task_classifier(object):
+    def __init__(self, channel, reuse_private, reuse_shared, num_classes, training=True):
+        self.channel = channel
+        # Last layers in the classifier
+        self.reuse_private = reuse_private
+        # First few layers in the classifier
+        self.reuse_shared = reues_shared
+        self.num_classes = num_classes
+        self.training = training
+        
+        self.module_name = 'discriminator'
+        
+    # Based on dilated Residual Network and Unsupervised pixel-lelvel domain adaptation
+    def __call__(self, image, shared='shared', private='private_task'):
+        layer_index = 0
+        with tf.variable_scope(self.module_name):
+            with tf.variable_scope(shared, reuse=self.reuse_shared):
+                # image_size - fiter_size + 2*pad + 1 (when stride=1)
+                x = tf.pad(image, [[0,0],[3,3],[3,3],[0,0]], 'SYMMETRIC')
+                x = op.conv2d(x, out_channel=self.channel//4, filter_size=7, stride=1, activation=tf.nn.relu, padding='VALID', normalization=op._batch_norm, name='conv2d_%d'%layer_index, training=self.training)
+                layer_index += 1
+                x, layer_index = op.residual_block(x, out_dim=self.channel//4, layer_index=layer_index, downsample=False, normalization=op._batch_norm, name='residual_%d'%residual_index, training=self.training)
+                residual_index += 1
+    
+                x, layer_index = op.residual_block(x, out_dim=self.channel//2, layer_index=layer_index, downsample=True, normalization=op._batch_norm, name='residual_%d'%residual_index, training=self.training)
+                residual_index += 1
+                 
+                x, layer_index = op.residual_block(x, out_dim=self.channel, layer_index=layer_index, downsample=True, normalizationname='residual_%d'%residual_index, training=self.training)
+                residual_index += 1
+
+                x, layer_index = op.residual_block(x, out_dim=self.channel*2, layer_index=layer_index, downsample=True, name='residual_%d'%residual_index, training=self.training)
+                residual_index += 1
+                x, layer_index = op.residual_block(x, out_dim=self.channel*2, layer_index=layer_index, downsample=False, name='residual_%d'%residual_index, training=self.training)
+                residual_index += 1
+    
+            with tf.variable_scope(private, reuse=self.reuse_private):
+                x, layer_index = op.residual_block(x, out_dim=self.channel*4, dilation_rate=2, layer_index=layer_index, downsample=False, name='residual_%d'%residual_index, training=self.training)
+                residual_index += 1
+                x, layer_index = op.residual_block(x, out_dim=self.channel*4, dilation_rate=2, layer_index=layer_index, downsample=False, name='residual_%d'%residual_index, training=self.training)
+                residual_index += 1
+    
+                x, layer_index = op.residual_block(x, out_dim=self.channel*8, dilation_rate=4, layer_index=layer_index, downsample=False, name='residual_%d'%residual_index, training=self.training)
+                residual_index += 1
+                x, layer_index = op.residual_block(x, out_dim=self.channel*8, dilation_rate=4, layer_index=layer_index, downsample=False, name='residual_%d'%residual_index, training=self.training)
+
+                # Removing gridding artifacts
+                x = op.conv2d(x, out_channel=self.channel*8, filter_size=3, stride=1, activation=tf.nn.relu, dilations=[1,2,2,1],name='conv2d_%d'%layer_index, training=self.training)
+                layer_index += 1
+                x = op.conv2d(x, out_channel=self.channel*8, filter_size=3, stride=1, activation=tf.nn.relu, dilations=[1,2,2,1],name='conv2d_%d'%layer_index, training=self.training)
+                layer_index += 1
+                
+                x = op.conv2d(x, out_channel=self.channel*8, filter_size=3, stride=1, activation=tf.nn.relu, name='conv2d_%d'%layer_index, training=self.training)
+                layer_index += 1
+                x = op.conv2d(x, out_channel=self.channel*8, filter_size=3, stride=1, activation=tf.nn.relu, name='conv2d_%d'%layer_index, training=self.training)
+                layer_index += 1
+               
+                # Global average pooling for classification output
+                x = op.global_average_pooling(x)
+
+                head_logits = op.fc(x, self.num_classes, activation=None, name='head')
+                lateral_logits = op.fc(x, self.num_classes, activation=None, name='latera')
+
+        return head_logits, lateral_logits
+
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     args = parser.parse_args()
-    g = generator(args)
-    x = tf.get_variable('test', [10, 224,224,3])
-    g.generator_drn(x)
+    g = generator(64)
+    x = tf.get_variable('test', [10, 320,180,3])
+    g.generator_drn(x, name='g')
             
-
-
-

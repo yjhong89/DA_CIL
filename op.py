@@ -16,6 +16,25 @@ def _instance_norm(x, training=True, name='instance_norm', epsilon=1e-5):
         
     return normalized
 
+def _batch_norm(x, training=True, name='batch_norm', decay=0.99, epsilon=1e-5):
+    _, _, _, channel = x.get_shape().as_list()
+    with tf.variable_scope(name):
+        scale = tf.get_variable('scale', [channel], initializer=tf.constant_initializer(1))
+        shift = tf.get_variable('shift', [channel], initializer=tf.constant_initializer(0))
+
+        pop_mean = tf.get_variable('pop_mean', [channel], initializer=tf.constant_initializer(0), trainable=False)
+        pop_var = tf.get_variable('pop_var', [channel], initializer=tf.constant_initializer(1), trainable=False)
+
+        if training:
+            batch_mean, batch_var = tf.nn.moments(x, [0,1,2])
+            train_mean = tf.assign(pop_mean, pop_mean*decay + batch_mean*(1-decay))
+            train_var = tf.assign(pop_var, pop_var*decay + batch_var*(1-decay))
+            with tf.control_dependencies([train_mean, train_var]):
+                return tf.nn.batch_normalization(x, batch_mean, batch_var, offset=shift, scale=scale, variance_epsilon=epsilon)
+        else:
+            return tf.nn.batch_normalization(x, pop_mean, pop_var, offset=shift, scale=scale, variance_epsilon=epsilon)
+
+
 def _leaky_relu(x, slope=0.2):
     return tf.maximum(x, 0.2*x)
 
@@ -43,8 +62,13 @@ def fc(x, hidden, dropout_ratio=0.5, activation=tf.nn.relu, dropout=True, name='
 
     return output
 
+def global_average_pooling(x, name='global_pooling'):
+    # Make fully connected layer
+    return tf.reduce_mean(x, [1,2])
+    
 
-def conv2d(x, out_channel, filter_size=4, stride=2, name='conv2d', activation=_leaky_relu, normalization=True, padding='SAME', dilations=[1,1,1,1]):
+
+def conv2d(x, out_channel, filter_size=4, stride=2, name='conv2d', activation=_leaky_relu, normalization=_instance_norm, padding='SAME', dilations=[1,1,1,1], training=training):
     _, _, _, in_channel = x.get_shape().as_list()
     with tf.variable_scope(name):
         weight = tf.get_variable('weight', shape=[filter_size, filter_size, in_channel, out_channel], initializer=tf.contrib.layers.xavier_initializer())
@@ -55,7 +79,7 @@ def conv2d(x, out_channel, filter_size=4, stride=2, name='conv2d', activation=_l
         output = output + bias
 
         if normalization:
-            output = _instance_norm(output)
+            output = normalization(output, training=training)
         if activation:
             output = activation(output)
 
@@ -82,8 +106,8 @@ def transpose_conv2d(x, out_channel, filter_size=4, stride=2, name='transpose_co
         return output        
 
 # To downsize width and height when downsampling
-def _avg_pool(x, kernel=[1,2,2,1], stride=[1,2,2,1]):
-    return tf.nn.avg_pool(x, ksize=kernel, strides=stride, padding='VALID')
+def _max_pool(x, kernel=[1,2,2,1], stride=[1,2,2,1]):
+    return tf.nn.max_pool(x, ksize=kernel, strides=stride, padding='SAME')
         
 
 def residual_block(x, out_dim, layer_index, dilation_rate=1, filter_size=3, downsample=True, name='residual'):
@@ -97,22 +121,23 @@ def residual_block(x, out_dim, layer_index, dilation_rate=1, filter_size=3, down
     with tf.variable_scope(name):
         # int: floor
         pad = int((filter_size - 1) / 2 * dilation_rate)
-        print(pad)
         r = tf.pad(x, [[0,0],[pad,pad],[pad,pad],[0,0]], 'SYMMETRIC')
         # Note that when using dilated convolution, stride must be 1
         # When down sampling, [height, width, channel] -> [height/2, width/2, channel*2], so conv2 and x does not match
         # From Resnet, we add zero pads to increase the depth
         if downsample:
-            x = _avg_pool(x)
+            x = _max_pool(x)
             x = tf.pad(x, [[0,0],[0,0],[0,0],[in_dim//2,in_dim//2]], 'CONSTANT')
             r = conv2d(r, out_channel=out_dim, filter_size=filter_size, stride=2, activation=tf.nn.relu, padding='VALID', dilations=dilations, name='conv2d_%d'%layer_index)
+            print(r.get_shape().as_list())
         else:
             if increase_dim:
                 x = tf.pad(x, [[0,0],[0,0],[0,0],[in_dim//2,in_dim//2]], 'CONSTANT')
             r = conv2d(r, out_channel=out_dim, filter_size=filter_size, stride=1, activation=tf.nn.relu, padding='VALID', dilations=dilations, name='conv2d_%d'%layer_index)
         index = layer_index + 1
         r = tf.pad(r, [[0,0],[pad,pad],[pad,pad],[0,0]], 'SYMMETRIC')
-        r = conv2d(r, out_channel=out_dim, filter_size=filter_size, stride=1, activation=None, padding='VALID',  dilations=dilations, name='conv2d_%d'%index)
+        r = conv2d(r, out_channel=out_dim, filter_size=filter_size, stride=1, activation=None, padding='VALID', dilations=dilations, name='conv2d_%d'%index)
+        print('layer: %d, shape of x: %s, shape of r: %s' % (layer_index, x.get_shape().as_list(), r.get_shape().as_list()))
         index += 1
         return tf.nn.relu(r+x), index
 
