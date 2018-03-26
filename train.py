@@ -3,7 +3,8 @@ import numpy as np
 import os
 import utils
 import dataset_utils
-import model
+import da_cil
+import da
 import shutil
 import importlib
 
