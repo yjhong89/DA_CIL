@@ -3,22 +3,28 @@ import os
 import argparse
 import configparser
 import utils
-import train
-import inference
+from train import train
+#import inference
 
 os.environ['CUDA_DEVICE_ORDER'] = 'PCI_BUS_ID'
-os.environ['CUDA_VISIBLE_DEVICES'] = 2
+os.environ['CUDA_VISIBLE_DEVICES'] = '1'
 
 
 def main():
-    parser = argparser.ArgumentParser()
+    parser = argparse.ArgumentParser()
     parser.add_argument('-d', '--delete', action='store_true')
-    parser.add_argument('-l', '--log', action='store_ture')
+    parser.add_argument('-l', '--log', action='store_true')
     parser.add_argument('--config', default='config.ini')
-    parser.add_argument('--batch_size', type=int, default=120)
-    parser.add_argument('--gradient_norm', type=float, default=5.0)
+    parser.add_argument('--batch_size', type=int, default=32)
+    parser.add_argument('--clip_norm', type=float, default=5.0)
     parser.add_argument('--optimizer', type=str, default='adam')
-    parser.add_argument('--train', type=utils.str2bool, default='t')
+    parser.add_argument('--training', type=utils.str2bool, default='t')
+    parser.add_argument('--max_iter', type=int, default=200000)
+    parser.add_argument('--t2s_task', type=utils.str2bool, default='t')
+    parser.add_argument('--learning_rate', type=float, default=0.0001)
+    parser.add_argument('--lr_decay', type=utils.str2bool, default='y')
+    parser.add_argument('--input_mask', type=utils.str2bool, default='t')
+   
 
     args = parser.parse_args()
     if args.log:
@@ -27,10 +33,15 @@ def main():
     config = utils.MyConfigParser()
     utils.load_config(config, args.config) 
 
-    if args.train:
-        tf.logging.info('Train')
-    else:
-        tf.logging.info('Inference')
+    gpu_config = tf.ConfigProto()
+    gpu_config.log_device_placement = False
+    gpu_config.gpu_options.allow_growth = True
+
+    with tf.Session(config=gpu_config) as sess:
+        if args.training:
+            train(sess, args, config)
+        else:
+            tf.logging.info('Inference')
 
 
 if __name__ == "__main__":

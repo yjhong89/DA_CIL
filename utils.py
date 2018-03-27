@@ -27,16 +27,16 @@ def str2bool(v):
     else:
         raise ValueError('%s is not supported' % v)
 
-def summarize(summary_set, t2s_regression_option):
+def summarize(summary_set, t2s_option):
     # Loss part
     cyclic_summary = tf.summary.scalar('cyclic_loss', summary_set['cyclic_loss'])
     s2t_d_loss_summary = tf.summary.scalar('s2t_d_loss', summary_set['s2t_d_loss'])
     t2s_d_loss_summary = tf.summary.scalar('t2s_d_loss', summary_set['t2s_d_loss'])
-    regression_loss_summary = tf.summary.scalar('regression_loss', summary_set['regression_loss'])
-    if t2s_regression_option:
-        t2s_regression_loss_summary = tf.summary.scalar('t2s_regression_loss', summary_set['t2s_regression_loss'])
+    task_loss_summary = tf.summary.scalar('task_loss', summary_set['task_loss'])
+    if t2s_option:
+        t2s_task_loss_summary = tf.summary.scalar('t2s_task_loss', summary_set['t2s_task_loss'])
     else:
-        t2s_regression_loss_summary = tf.summary.scalar('t2s_regression_loss', 0)
+        t2s_task_loss_summary = tf.summary.scalar('t2s_regression_loss', 0)
     generator_loss_summary = tf.summary.scalar('generator_loss', summary_set['generator_loss'])
     discriminator_loss_summary = tf.summary.scalar('discriminator_loss', summary_set['discriminator_loss'])
 
@@ -46,11 +46,11 @@ def summarize(summary_set, t2s_regression_option):
     s2t2s_summary = _summarize_transferred_grid(summary_set['source_image'], summary_set['back2source'], name='S2T2S')
     t2s2t_summary = _summarize_transferred_grid(summary_set['target_image'], summary_set['back2target'], name='T2ST2')
 
-    discriminator_merged = [s2t_d_loss_summary, t2s_d_loss_summary, regression_loss_summary, t2s_regression_loss_summary, discriminator_loss_summary]
+    discriminator_merged = [s2t_d_loss_summary, t2s_d_loss_summary, task_loss_summary, t2s_task_loss_summary, discriminator_loss_summary]
     generator_merged = [cyclic_summary, generator_loss_summary, s2t_summary, t2s_summary, s2t2s_summary, t2s2t_summary]
 
-    generator_merge_summary = tf.summary.merge(generator_merge)
-    discriminator_merge_summary = tf.summary.merge(discriminator_merge)
+    generator_merge_summary = tf.summary.merge(generator_merged)
+    discriminator_merge_summary = tf.summary.merge(discriminator_merged)
 
     return generator_merge_summary, discriminator_merge_summary
   
@@ -61,7 +61,7 @@ def _image_grid(images, max_grid_size=4):
         returns max_grid_size*max_grid_size image grid
     '''
 
-    batch_size, height, width, channel = images.get_shape().as_list()[0]
+    batch_size, height, width, channel = images.get_shape().as_list()
     grid_size = min(int(math.sqrt(batch_size)), max_grid_size)
     
     assert channel == 3
@@ -91,18 +91,18 @@ def _merge_image_grid(source_images, transferred_images, max_grid_size=4):
     return output_grid
 
 
-def _summarize_transferred_grid(source_images, target_images=None, name='Image_grid'):
+def _summarize_transferred_grid(source_images, transferred_images=None, name='Image_grid'):
     '''
         source_images, transferred_imags: [batch size, height, width, channels]
     '''
     source_channels = source_images.get_shape().as_list()[-1]
-    transerred_channels = transferred_images.get_shape().as_list()[-1]
+    transferred_channels = transferred_images.get_shape().as_list()[-1]
 
     if source_channels != transferred_channels:
         raise ValueError('Number of channels not match')
 
-    if target_images is not None:
-        grid = _merge_image_grid(source_images, transferred_image)
+    if transferred_images is not None:
+        grid = _merge_image_grid(source_images, transferred_images)
     else:
         grid = _image_grid(source_images)
 

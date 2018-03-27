@@ -11,17 +11,17 @@ class model():
 
         model_name = config.get('config', 'experiment') 
         discriminator_channel = config.getint('discriminator', 'channel')
-        generator_type = config.get('generator', 'type')
         generator_channel = config.getint('generator', 'channel')
         classifier_channel = config.getint('classifier', 'channel')
         #   dropout = config.getfloat('classifier', 'dropout')
 
+        self.generator_type = config.get('generator', 'type')
         self.generator = modules.generator(generator_channel)
-        self.discriminator = modules.discriminator(discriminator(channel)
+        self.discriminator = modules.discriminator(discriminator_channel)
         
         self.transferred_classifier = modules.task_classifier(classifier_channel, num_classes=3, training=self.args.training) 
 
-        self.transferred_task_weight = config.getfloat(model_name, 'transferred_task_weight')
+        self.transferred_task_weight = config.getfloat(model_name, 'task_weight')
         self.t2s_task_weight = config.getfloat(model_name, 't2s_task_weight')
 
         self.summary = dict()
@@ -32,18 +32,19 @@ class model():
         with tf.name_scope('generator'):
             self.summary['source_image'] = source
             self.summary['target_image'] = target
-            if generator_type == 'DRN':
+            if self.generator_type == 'DRN':
                 self.g_s2t = self.generator.generator_drn(source, name='G_S2T')
                 # [batch, height, width, 3]
                 self.summary['source_transferred'] = self.g_s2t                
                 self.g_t2s = self.generator.generator_drn(target, name='G_T2S')
                 self.summary['target_transferred'] = self.g_t2s
+                print(self.g_s2t.get_shape().as_list())
 
                 self.s2t2s = self.generator.generator_drn(self.g_s2t, reuse=True, name='G_T2S')
                 self.summary['back2source'] = self.s2t2s
                 self.t2s2t = self.generator.generator_drn(self.g_t2s, reuse=True, name='G_S2T')
                 self.summary['back2target'] = self.t2s2t
-            elif generator_type == 'UNET':
+            elif self.generator_type == 'UNET':
                 self.g_s2t = self.generator.generator_unet(fake_image, name='G_S2T')
                 self.summary['source_transferred'] = self.g_s2t
                 self.g_t2s = self.generator.generator_unet(real_image, name='G_T2S')    
@@ -65,12 +66,12 @@ class model():
             self.source_real = self.discriminator(source, reuse=True, name='D_T2S')
 
         with tf.name_scope('classifier'):
-            self.head_logits, self.lateral_logits = self.transferred_classifier(self.g_s2t, reuse_private=False, reuse_shared=False, shared='transferred_shared', private='transferred_shared')  
-            if self.t2s_task:
+            self.head_logits, self.lateral_logits = self.transferred_classifier(self.g_s2t, reuse_private=False, reuse_shared=False, shared='transferred_shared', private='transferred_private')  
+            print(self.head_logits.get_shape().as_list())
+            if self.args.t2s_task:
                 self.t2s_head_logits, self.t2s_lateral_logits = self.transferred_classifier(self.g_t2s, reuse_private=False, reuse_shared=True, shared='transferred_shared', private='t2s_private')
 
     def create_objective(self, head_labels, lateral_labels):
-        self.command = command
         with tf.name_scope('cyclic'):
             self.s2t_cyclic_loss = losses.cyclic_loss(self.summary['source_image'], self.s2t2s)
             self.t2s_cyclic_loss = losses.cyclic_loss(self.summary['target_image'], self.t2s2t)
@@ -78,16 +79,16 @@ class model():
         
         # Wasserstein with gradient-penalty
         with tf.name_scope('adversarial'):
-            self.s2t_g_loss, self.s2t_d_loss = losses.adversarial_loss(self.target_real, self.s2t_fake, name='D_S2T', mode='WGP')
-            self.t2s_g_loss, self.t2s_d_loss = losses.adversarial_loss(self.source_real, self.t2s_fake, name='D_T2S', mode='WGP')
+            self.s2t_g_loss, self.s2t_d_loss = losses.adversarial_loss(self.g_s2t, self.summary['target_image'], self.target_real, self.s2t_fake, mode='WGP', discriminator=self.discriminator, discriminator_name='D_S2T')
+            self.t2s_g_loss, self.t2s_d_loss = losses.adversarial_loss(self.g_t2s, self.summary['source_image'], self.source_real, self.t2s_fake, mode='WGP', discriminator=self.discriminator, discriminator_name='D_T2S')
             self.summary['s2t_d_loss'] = self.s2t_d_loss
             self.summary['t2s_d_loss'] = self.t2s_d_loss            
 
         with tf.name_scope('task'):
             self.transferred_task_loss = losses.task_classifier_loss(head_labels, lateral_labels, self.head_logits, self.lateral_logits, weight=self.transferred_task_weight)
-            self.summary['transferred_task_loss'] = self.transferred_task_loss
+            self.summary['task_loss'] = self.transferred_task_loss
             if self.args.t2s_task:
                 self.t2s_task_loss = losses.task_classifier_loss(head_labels, lateral_labels, self.t2s_head_logits, self.t2s_lateral_logits, weight=self.t2s_task_weight)
-                self.summary['self.t2s_task_loss'] = self.t2s_task_loss
+                self.summary['t2s_task_loss'] = self.t2s_task_loss
        
 

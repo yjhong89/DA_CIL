@@ -66,22 +66,42 @@ def global_average_pooling(x, name='global_pooling'):
     # Make fully connected layer
     return tf.reduce_mean(x, [1,2])
     
+def dilated_conv2d(x, out_channel, filter_size, dilation_rate, name='dilated_conv2d', activation=_leaky_relu, normalization=_instance_norm, padding='VALID', training=True):
+    _, _, _, in_channel = x.get_shape().as_list()
+    with tf.variable_scope(name):
+        weight = tf.get_variable('weight', shape=[filter_size, filter_size, in_channel, out_channel], initializer=tf.contrib.layers.xavier_initializer())
+        bias = tf.get_variable('bias', shape=[out_channel], initializer=tf.constant_initializer(0))
+                
+        rate = [dilation_rate, dilation_rate]
+        # stride must be 1
+        output = tf.nn.convolution(x, weight, padding=padding, dilation_rate=rate) + bias
+
+        if normalization:
+            output = normalization(output)
+        if activation:
+            output = activation(output)
+
+        print('dilated convolution', output.get_shape().as_list())
+
+    return output      
 
 
-def conv2d(x, out_channel, filter_size=4, stride=2, name='conv2d', activation=_leaky_relu, normalization=_instance_norm, padding='SAME', dilations=[1,1,1,1], training=training):
+def conv2d(x, out_channel, filter_size=4, stride=2, name='conv2d', activation=_leaky_relu, normalization=_instance_norm, padding='SAME', training=True):
     _, _, _, in_channel = x.get_shape().as_list()
     with tf.variable_scope(name):
         weight = tf.get_variable('weight', shape=[filter_size, filter_size, in_channel, out_channel], initializer=tf.contrib.layers.xavier_initializer())
         bias = tf.get_variable('bias', shape=[out_channel], initializer=tf.constant_initializer(0))
         # NHWC: batch, height, width, channel
         # padding VALID: no zero padding, only covers the valid input
-        output = tf.nn.conv2d(x, weight, strides=[1, stride, stride, 1], padding=padding, data_format='NHWC', dilations=dilations, name='convolution')
+        output = tf.nn.conv2d(x, weight, strides=[1, stride, stride, 1], padding=padding, data_format='NHWC', name='convolution')
         output = output + bias
 
         if normalization:
             output = normalization(output, training=training)
         if activation:
             output = activation(output)
+
+        print('convolution', output.get_shape().as_list())
 
         return output
 
@@ -102,6 +122,7 @@ def transpose_conv2d(x, out_channel, filter_size=4, stride=2, name='transpose_co
             output = _instance_norm(output)
         if activation:
             output = activation(output)
+        print('upsampling', output.get_shape().as_list())
             
         return output        
 
@@ -110,14 +131,13 @@ def _max_pool(x, kernel=[1,2,2,1], stride=[1,2,2,1]):
     return tf.nn.max_pool(x, ksize=kernel, strides=stride, padding='SAME')
         
 
-def residual_block(x, out_dim, layer_index, dilation_rate=1, filter_size=3, downsample=True, name='residual'):
+def residual_block(x, out_dim, layer_index, dilation_rate=1, filter_size=3, downsample=True, name='residual', normalization=_instance_norm, training=True):
     in_dim = x.get_shape().as_list()[-1]
     if in_dim * 2 == out_dim:
         increase_dim = True
     else:
         increase_dim = False
 
-    dilations = [1, dilation_rate, dilation_rate, 1]
     with tf.variable_scope(name):
         # int: floor
         pad = int((filter_size - 1) / 2 * dilation_rate)
@@ -127,19 +147,20 @@ def residual_block(x, out_dim, layer_index, dilation_rate=1, filter_size=3, down
         # From Resnet, we add zero pads to increase the depth
         if downsample:
             x = _max_pool(x)
+            r = tf.pad(x, [[0,0],[pad,pad],[pad,pad],[0,0]], 'SYMMETRIC')
+            r1 = dilated_conv2d(r, out_channel=out_dim, filter_size=filter_size, activation=tf.nn.relu, padding='VALID', dilation_rate=dilation_rate, name='conv2d_%d'%layer_index, normalization=normalization, training=training)
             x = tf.pad(x, [[0,0],[0,0],[0,0],[in_dim//2,in_dim//2]], 'CONSTANT')
-            r = conv2d(r, out_channel=out_dim, filter_size=filter_size, stride=2, activation=tf.nn.relu, padding='VALID', dilations=dilations, name='conv2d_%d'%layer_index)
-            print(r.get_shape().as_list())
+            print(r1.get_shape().as_list())
         else:
             if increase_dim:
                 x = tf.pad(x, [[0,0],[0,0],[0,0],[in_dim//2,in_dim//2]], 'CONSTANT')
-            r = conv2d(r, out_channel=out_dim, filter_size=filter_size, stride=1, activation=tf.nn.relu, padding='VALID', dilations=dilations, name='conv2d_%d'%layer_index)
+            r1 = dilated_conv2d(r, out_channel=out_dim, filter_size=filter_size, activation=tf.nn.relu, padding='VALID', dilation_rate=dilation_rate, name='conv2d_%d'%layer_index, normalization=normalization, training=training)
         index = layer_index + 1
-        r = tf.pad(r, [[0,0],[pad,pad],[pad,pad],[0,0]], 'SYMMETRIC')
-        r = conv2d(r, out_channel=out_dim, filter_size=filter_size, stride=1, activation=None, padding='VALID', dilations=dilations, name='conv2d_%d'%index)
-        print('layer: %d, shape of x: %s, shape of r: %s' % (layer_index, x.get_shape().as_list(), r.get_shape().as_list()))
+        r1 = tf.pad(r1, [[0,0],[pad,pad],[pad,pad],[0,0]], 'SYMMETRIC')
+        r2 = dilated_conv2d(r1, out_channel=out_dim, filter_size=filter_size, activation=None, padding='VALID', dilation_rate=dilation_rate, name='conv2d_%d'%index, normalization=normalization, training=training)
+        print('layer: %d, shape of x: %s, shape of r: %s' % (layer_index, x.get_shape().as_list(), r2.get_shape().as_list()))
         index += 1
-        return tf.nn.relu(r+x), index
+        return tf.nn.relu(r2+x), index
 
 
 
