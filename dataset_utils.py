@@ -224,6 +224,17 @@ def _augmentation(image, config):
 
     return image
 
+_SOURCE_SPLITS_TO_SIZES = {'train': 67644, 'valid': 747, 'test': 6759}
+_SOURCE_IMAGE_SIZE = [360,640,4]
+_SOURCE_ITEMS_TO_DESCRIPTIONS = {
+            'image': 'A [360x640x1] RGB image.',
+            'label': 'A single integer between 0 and 8' }
+_TARGET_SPLITS_TO_SIZES = {'train': 21870, 'valid': 2187, 'test': 2430}
+_TARGET_IMAGE_SIZE = [180, 320, 3]
+_TARGET_ITEMS_TO_DESCRIPTIONS = {
+            'image': 'A [180x320x3]',
+            'label': 'A single integer between 0 and 8'}
+
 def get_batches(dataset_name, split_name, tfrecord_dir, batch_size):
     tfrecord_path = os.path.join(os.getcwd(), tfrecord_dir, '%s_%s.tfrecord' % (dataset_name, split_name))
     if not isinstance(tfrecord_path, (tuple, list)):
@@ -233,38 +244,131 @@ def get_batches(dataset_name, split_name, tfrecord_dir, batch_size):
     tf.logging.info('%s_%s.tfrecord: %d examples' % (dataset_name, split_name, num_examples))
 
     with tf.name_scope('read_tfrecord'):
-        reader = tf.TFRecordReader()
-        file_queue = tf.train.string_input_producer(tfrecord_path)
-        _, serialized_example = reader.read(file_queue)
+        reader = tf.TFRecordReader
+        #file_queue = tf.train.string_input_producer(tfrecord_path)
+        #_, serialized_example = reader.read(file_queue)
 
         keys_to_features = {
-            'image/encoded': tf.FixedLenFeature([], tf.string),
+            'image/encoded': tf.FixedLenFeature([], dtype=tf.string),
+            'image/format': tf.FixedLenFeature([], tf.string),
             'image/class/label': tf.FixedLenFeature([1], tf.int64) } 
 
-        example = tf.parse_single_example(serialized_example, features=keys_to_features)
-
-    with tf.name_scope('decode'):
-        image = tf.decode_raw(example['image/encoded'], tf.float32)
-        label = tf.cast(example['image/class/label'], tf.int64)
-
-        # Reshape image to original shape
-        # source image include mask in channel 4
         if dataset_name == 'source':
-            image = tf.reshape(image, (360, 640, 4)) 
-        elif dataset_name == 'target':
-            image = tf.reshape(image, (90, 160, 3))
+            items_to_handlers = {
+                'image': slim.tfexample_decoder.Image(shape=_SOURCE_IMAGE_SIZE, channels=4),
+                'label': slim.tfexample_decoder.Tensor('image/class/label', shape=[]) }
 
-        # per_sample_normalization
+            decoder = slim.tfexample_decoder.TFExampleDecoder(keys_to_features, items_to_handlers)
+
+            slim_dataset = slim.dataset.Dataset(data_sources=tfrecord_path, reader=reader, decoder=decoder, num_samples=_SOURCE_SPLITS_TO_SIZES[split_name], num_classes=9, items_to_descriptions=_SOURCE_ITEMS_TO_DESCRIPTIONS)
+
+        elif dataset_name == 'target':
+            items_to_handlers = {
+                'image': slim.tfexample_decoder.Image(shape=_TARGET_IMAGE_SIZE, channels=3),
+                'label': slim.tfexample_decoder.Tensor('image/class/label', shape=[]) }
+
+            decoder = slim.tfexample_decoder.TFExampleDecoder(keys_to_features, items_to_handlers)
+
+            slim_dataset = slim.dataset.Dataset(data_sources=tfrecord_path, reader=reader, decoder=decoder, num_samples=_TARGET_SPLITS_TO_SIZES[split_name], num_classes=9, items_to_descriptions=_TARGET_ITEMS_TO_DESCRIPTIONS)
+        else:
+            raise ValueError
+        
+        provider = slim.dataset_data_provider.DatasetDataProvider(slim_dataset, num_readers=4, common_queue_capacity=20*batch_size, common_queue_min=10*batch_size)
+
+
+        # currently, image dtype: uint8
+        [image, label] = provider.get(['image', 'label'])
+        image = tf.image.convert_image_dtype(image, tf.float32)
         image = tf.image.per_image_standardization(image)
+
         image_batch, label_batch = tf.train.shuffle_batch([image, label], batch_size=batch_size, 
-                capacity=batch_size*10, num_threads=10, min_after_dequeue=batch_size*2)
+                capacity=batch_size*5, num_threads=10, min_after_dequeue=10)
+
         image_batch = tf.image.resize_images(image_batch, [360, 640])
         
         # [batch, 1] -> [batch size, 1, 9]
         label_batch = slim.one_hot_encoding(label_batch, 9)
         label_batch = tf.reshape(label_batch, [-1, 9])
+         
+        
+#        example = tf.parse_single_example(serialized_example, features=keys_to_features)
+#
+#
+#    with tf.name_scope('decode'):
+#        image = tf.decode_raw(example['image/encoded'], tf.float32)
+#        label = tf.cast(example['image/class/label'], tf.int64)
+#
+#        # Reshape image to original shape
+#        # source image include mask in channel 4
+#        if dataset_name == 'source':
+#            image = tf.reshape(image, (360, 640, 4)) 
+#        elif dataset_name == 'target':
+#            image = tf.reshape(image, (90, 160, 3))
+#
+#        # per_sample_normalization
+#        image = tf.image.per_image_standardization(image)
+#        image_batch, label_batch = tf.train.shuffle_batch([image, label], batch_size=batch_size, 
+#                capacity=batch_size*5, num_threads=10, min_after_dequeue=10)
+#
+#        image_batch = tf.image.resize_images(image_batch, [360, 640])
+#        
+#        # [batch, 1] -> [batch size, 1, 9]
+#        label_batch = slim.one_hot_encoding(label_batch, 9)
+#        label_batch = tf.reshape(label_batch, [-1, 9])
 
     return image_batch, label_batch
 
-        
+def check_tfrecord(dataset_name, split_name, tfrecord_dir): 
+    tfrecord_path = os.path.join(os.getcwd(), tfrecord_dir, '%s_%s.tfrecord' % (dataset_name, split_name))
 
+    record_iterator = tf.python_io.tf_record_iterator(path=tfrecord_path)
+    
+    for string_record in record_iterator:
+        # Parse next example
+        example = tf.train.Example()
+        example.ParseFromString(string_record)
+        
+        # Get features you stored
+        label = int(example.features.feature['image/class/label']
+                                .int64_list
+                                .value[0])
+        format_ = (example.features.feature['image/format']
+                                .bytes_list
+                                .value[0])
+
+        img_string = (example.features.feature['image/encoded']
+                                .bytes_list
+                                .value[0])
+        height = int(example.features.feature['image/height']
+                                .int64_list
+                                .value[0])
+        width = int(example.features.feature['image/width']
+                                .int64_list
+                                .value[0])
+
+        print('height/width', height, width)
+        print(len(img_string),', ', label)
+        # Convert image string to numpy, unsigned integer
+        img = np.fromstring(img_string, np.uint8).astype(np.float32)
+
+
+
+if __name__ == "__main__":
+    c = tf.get_variable('a', [3,4]) 
+
+    with tf.Session() as sess:
+
+        a, b = get_batches('source', 'train', 'pixel_da', 10)
+        #check_tfrecord('target', 'train', 'pixel_da')
+        sess.run(tf.group(tf.global_variables_initializer(), tf.local_variables_initializer()))
+        coord = tf.train.Coordinator()
+        threads = tf.train.start_queue_runners(sess=sess, coord=coord)
+
+        print(sess.run(a))
+        print(sess.run(a).shape)
+        print(sess.run(b))
+
+        coord.request_stop()
+        coord.join(threads)
+          
+        

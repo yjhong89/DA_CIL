@@ -81,7 +81,7 @@ def dilated_conv2d(x, out_channel, filter_size, dilation_rate, name='dilated_con
         if activation:
             output = activation(output)
 
-        print('dilated convolution', output.get_shape().as_list())
+        #print('dilated convolution', output.get_shape().as_list())
 
     return output      
 
@@ -101,7 +101,7 @@ def conv2d(x, out_channel, filter_size=4, stride=2, name='conv2d', activation=_l
         if activation:
             output = activation(output)
 
-        print('convolution', output.get_shape().as_list())
+        #print('convolution', output.get_shape().as_list())
 
         return output
 
@@ -122,7 +122,7 @@ def transpose_conv2d(x, out_channel, filter_size=4, stride=2, name='transpose_co
             output = _instance_norm(output)
         if activation:
             output = activation(output)
-        print('upsampling', output.get_shape().as_list())
+        #print('upsampling', output.get_shape().as_list())
             
         return output        
 
@@ -150,7 +150,7 @@ def residual_block(x, out_dim, layer_index, dilation_rate=1, filter_size=3, down
             r = tf.pad(x, [[0,0],[pad,pad],[pad,pad],[0,0]], 'SYMMETRIC')
             r1 = dilated_conv2d(r, out_channel=out_dim, filter_size=filter_size, activation=tf.nn.relu, padding='VALID', dilation_rate=dilation_rate, name='conv2d_%d'%layer_index, normalization=normalization, training=training)
             x = tf.pad(x, [[0,0],[0,0],[0,0],[in_dim//2,in_dim//2]], 'CONSTANT')
-            print(r1.get_shape().as_list())
+            #print(r1.get_shape().as_list())
         else:
             if increase_dim:
                 x = tf.pad(x, [[0,0],[0,0],[0,0],[in_dim//2,in_dim//2]], 'CONSTANT')
@@ -158,7 +158,7 @@ def residual_block(x, out_dim, layer_index, dilation_rate=1, filter_size=3, down
         index = layer_index + 1
         r1 = tf.pad(r1, [[0,0],[pad,pad],[pad,pad],[0,0]], 'SYMMETRIC')
         r2 = dilated_conv2d(r1, out_channel=out_dim, filter_size=filter_size, activation=None, padding='VALID', dilation_rate=dilation_rate, name='conv2d_%d'%index, normalization=normalization, training=training)
-        print('layer: %d, shape of x: %s, shape of r: %s' % (layer_index, x.get_shape().as_list(), r2.get_shape().as_list()))
+        #print('layer: %d, shape of x: %s, shape of r: %s' % (layer_index, x.get_shape().as_list(), r2.get_shape().as_list()))
         index += 1
         return tf.nn.relu(r2+x), index
 

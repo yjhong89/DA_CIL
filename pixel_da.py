@@ -38,7 +38,6 @@ class model():
                 self.summary['source_transferred'] = self.g_s2t                
                 self.g_t2s = self.generator.generator_drn(target, name='G_T2S')
                 self.summary['target_transferred'] = self.g_t2s
-                print(self.g_s2t.get_shape().as_list())
 
                 self.s2t2s = self.generator.generator_drn(self.g_s2t, reuse=True, name='G_T2S')
                 self.summary['back2source'] = self.s2t2s
@@ -67,7 +66,6 @@ class model():
 
         with tf.name_scope('classifier'):
             self.head_logits, self.lateral_logits = self.transferred_classifier(self.g_s2t, reuse_private=False, reuse_shared=False, shared='transferred_shared', private='transferred_private')  
-            print(self.head_logits.get_shape().as_list())
             if self.args.t2s_task:
                 self.t2s_head_logits, self.t2s_lateral_logits = self.transferred_classifier(self.g_t2s, reuse_private=False, reuse_shared=True, shared='transferred_shared', private='t2s_private')
 

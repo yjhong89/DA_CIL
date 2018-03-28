@@ -76,7 +76,6 @@ class generator(object):
             with tf.variable_scope(name+'_DRN'):
                 if reuse:
                     tf.get_variable_scope().reuse_variables()
-                print(x.get_shape().as_list()) 
                 # image_size - fiter_size + 2*pad + 1 (when stride=1)
                 x = tf.pad(x, [[0,0],[3,3],[3,3],[0,0]], 'SYMMETRIC')
                 x = op.conv2d(x, out_channel=int(self.channel//4), filter_size=7, stride=1, activation=tf.nn.relu, padding='VALID', name='conv2d_%d'%layer_index)

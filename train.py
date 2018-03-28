@@ -24,7 +24,7 @@ def _get_trainable_vars(scope):
     var_list = list(filter(is_trainable, var_list))
 
     tf.logging.info('Trainable variable for %s' % scope)
-    tf.logging.info('%s' % var_list)
+    #tf.logging.info('%s' % var_list)
 
     return var_list
 
@@ -54,10 +54,9 @@ def train(sess, args, config):
 
     da_model = model(args, config)
 
-    sess.run(tf.global_variables_initializer())
-
     writer = tf.summary.FileWriter(log_dir, sess.graph)
     global_step = tf.train.get_or_create_global_step()
+
 
     if model_type == 'da_cil':
         with tf.name_scope(model_type + '_batches'):
@@ -118,6 +117,7 @@ def train(sess, args, config):
        
     generator_summary, discriminator_summary = utils.summarize(da_model.summary, args.t2s_task) 
     #utils.config_summary(log_dir, config)
+    sess.run(tf.group(tf.global_variables_initializer(), tf.local_variables_initializer()))
 
     coord = tf.train.Coordinator()
     threads = tf.train.start_queue_runners(sess, coord)
@@ -141,6 +141,6 @@ def train(sess, args, config):
         print('End training')
     finally:
         coord.request_stop()
-        coord.join(threads=threads)      
+        coord.join(threads)      
 
 
