@@ -47,7 +47,10 @@ def train(sess, args, config):
 
     if args.delete:
         shutil.rmtree(log_dir)
-    os.makedirs(log_dir, exist_ok=True)
+
+	#os.makedirs(log_dir, exist_ok=True)
+	if os.path.exists(log_dir):
+		os.mkdir(log_dir)
 
     model_path = importlib.import_module(model_type)
     model = getattr(model_path, 'model')
