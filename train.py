@@ -23,16 +23,16 @@ def _get_trainable_vars(scope):
     var_list = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope=scope)
     var_list = list(filter(is_trainable, var_list))
 
-    tf.logging.info('Trainable variable for %s' % scope)
+    tf.logging.info('Getting trainable variable for %s' % scope)
     #tf.logging.info('%s' % var_list)
 
     return var_list
 
-def _gradient_clip(name, optimizer, loss, clip_norm=5.0):
+def _gradient_clip(name, optimizer, loss, global_steps, clip_norm=5.0):
     var_list = _get_trainable_vars(name)
     grds, var = zip(*optimizer.compute_gradients(loss, var_list=var_list))
     gradients = [gradient if gradient is None else tf.clip_by_norm(gradient, 5.0) for gradient in grds]
-    optim = optimizer.apply_gradients(zip(gradients, var))
+    optim = optimizer.apply_gradients(zip(gradients, var), global_step=global_steps)
     return optim
 
 def train(sess, args, config):
@@ -70,9 +70,6 @@ def train(sess, args, config):
        
         with tf.name_scope(model_path + '_objectives'):
             da_model.create_objective(source_label_batch[0], source_label_batch[1])
-            #generator_loss = da_model.g_step_loss()
-            
-            #discriminator_loss = da_model.d_step_loss()   
 
     elif model_type == 'pixel_da':
         tf.logging.info('Training %s' % model_type)
@@ -115,8 +112,8 @@ def train(sess, args, config):
             learning_rate = args.learning_rate
 
         optimizer = _get_optimizer(config, args.optimizer)(learning_rate)
-        g_optim = _gradient_clip(name='generator', optimizer=optimizer, loss=generator_loss, clip_norm=args.clip_norm)
-        d_optim = _gradient_clip(name='discriminator', optimizer=optimizer, loss=discriminator_loss, clip_norm=args.clip_norm)
+        g_optim = _gradient_clip(name='generator', optimizer=optimizer, loss=generator_loss, global_steps=global_step, clip_norm=args.clip_norm)
+        d_optim = _gradient_clip(name='discriminator', optimizer=optimizer, loss=discriminator_loss, global_steps=global_step, clip_norm=args.clip_norm)
        
     generator_summary, discriminator_summary = utils.summarize(da_model.summary, args.t2s_task) 
     #utils.config_summary(log_dir, config)
@@ -129,14 +126,15 @@ def train(sess, args, config):
         for iter_count in range(args.max_iter):
             # Update discriminator
             for disc_iter in range(config.getint(model_type, 'discriminator_step')):
-                loss, steps, disc_sum = sess.run([d_optim, global_step, discriminator_summary])
+                d_loss, _, steps, disc_sum = sess.run([discriminator_loss, d_optim, global_step, discriminator_summary])
                 writer.add_summary(disc_sum, steps)
-                tf.logging.info('Step: %d: Discriminator loss=%.5f', steps, loss)
+                #print('Step: %d, discriminator loss: %.6f' % (steps, loss))
+                tf.logging.info('Step: %d: Discriminator loss=%.5f', steps, d_loss)
 
             for gen_iter in range(config.getint(model_type, 'generator_step')):
-                loss, steps, gen_sum = sess.run([g_optim, global_step, generator_summary])
+                g_loss, _, steps, gen_sum = sess.run([generator_loss, g_optim, global_step, generator_summary])
                 writer.add_summary(gen_sum, steps)
-                tf.logging.info('Step: %d: Generator loss=%.5f', steps, loss)
+                tf.logging.info('Step: %d: Generator loss=%.5f', steps, g_loss)
         
     except tf.errors.OutOfRangeError:
         print('Epoch limited')

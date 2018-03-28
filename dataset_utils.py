@@ -282,7 +282,7 @@ def get_batches(dataset_name, split_name, tfrecord_dir, batch_size):
         image = tf.image.per_image_standardization(image)
 
         image_batch, label_batch = tf.train.shuffle_batch([image, label], batch_size=batch_size, 
-                capacity=batch_size*5, num_threads=10, min_after_dequeue=10)
+                capacity=batch_size*10, num_threads=10, min_after_dequeue=batch_size*2)
 
         image_batch = tf.image.resize_images(image_batch, [360, 640])
         
