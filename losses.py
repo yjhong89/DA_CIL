@@ -3,14 +3,14 @@ import tensorflow.contrib.slim as slim
 
 
 def cyclic_loss(origin, back2origin):
-    return tf.reduce_mean(tf.abs(origin - back2origin))
+    return tf.reduce_mean(tf.reduce_sum(tf.abs(origin - back2origin), [1,2,3]))
 
 def adversarial_loss(real_sample, fake_sample, real_logits, fake_logits, discriminator, mode='WGP', discriminator_name='D_S2T', gp_lambda=10):
     def gp(real, fake, name):
         epsilon = tf.random_uniform([], maxval=1.0)
         x_hat = epsilon * real + (1 - epsilon) * fake
         # 70x70 patch GAN
-        discriminator_logits = tf.reduce_mean(discriminator(x_hat, reuse=True, name=name))
+        discriminator_logits = discriminator(x_hat, reuse=True, name=name)
         # tf.gradient returns list of sum dy/dx for each xs in x
         gradient = tf.gradients(discriminator_logits, [x_hat])[0]
         gradient_l2_norm = tf.sqrt(tf.reduce_sum(tf.square(gradient), axis=[1,2,3]))
@@ -20,10 +20,10 @@ def adversarial_loss(real_sample, fake_sample, real_logits, fake_logits, discrim
         return gradient_penalty
 
     if mode == 'WGP':
-        g_loss = -tf.reduce_mean(fake_logits)
+        g_loss = -tf.reduce_mean(tf.reduce_sum(fake_logits, [1,2,3]))
 
-        d_real_loss = tf.reduce_mean(real_logits)
-        d_fake_loss = tf.reduce_mean(fake_logits)
+        d_real_loss = tf.reduce_mean(tf.reduce_sum(real_logits, [1,2,3]))
+        d_fake_loss = tf.reduce_mean(tf.reduce_sum(fake_logits, [1,2,3]))
         gradient_penalty = gp(real_sample, fake_sample, discriminator_name)
         d_loss = d_fake_loss - d_real_loss + gradient_penalty * gp_lambda
 

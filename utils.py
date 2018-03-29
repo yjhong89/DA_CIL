@@ -109,3 +109,14 @@ def _summarize_transferred_grid(source_images, transferred_images=None, name='Im
     # max_outputs: max number of batch to generate images
     return tf.summary.image(name, grid, max_outputs=1)
 
+def config_summary(save_dir, adversarial_weight, cyclic_weight, task_weight, discriminator_step, generator_step):
+    if not os.path.exists(save_dir):
+        os.mkdir(save_dir)
+
+    with open(os.path.join(save_dir, 'params.txt'), 'w') as f:
+        f.write('Adversarial weight : ' + str(adversarial_weight))
+        f.write('\nCyclic weight : ' + str(cyclic_weight))
+        f.write('\nTask weight : ' + str(task_weight))
+        f.write('\nDiscriminator step : ' + str(discriminator_step))
+        f.write('\nGenerator step : ' + str(generator_step))
+        f.close()

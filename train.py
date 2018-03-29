@@ -40,10 +40,14 @@ def train(sess, args, config):
     base_dir = os.path.expanduser(config.get('config', 'basedir'))
     tfrecord_dir = os.path.join(base_dir, config.get(model_type, 'tfrecord'))
     log_dir = os.path.join(base_dir, config.get('config', 'logdir'))
+    to_save_dir = config.get('config', 'savedir')
 
     adversarial_weight = config.getfloat(model_type, 'adversarial_weight')
     cyclic_weight = config.getfloat(model_type, 'cyclic_weight')
     task_weight = config.getfloat(model_type, 'task_weight')
+    discriminator_step = config.getint(model_type, 'discriminator_step')
+    generator_step = config.getint(model_type, 'generator_step')
+    save_dir = os.path.join(log_dir, to_save_dir)
 
     if args.delete:
         shutil.rmtree(log_dir)
@@ -57,7 +61,7 @@ def train(sess, args, config):
 
     da_model = model(args, config)
 
-    writer = tf.summary.FileWriter(log_dir, sess.graph)
+    writer = tf.summary.FileWriter(save_dir, sess.graph)
     global_step = tf.train.get_or_create_global_step()
 
 
@@ -116,7 +120,7 @@ def train(sess, args, config):
         d_optim = _gradient_clip(name='discriminator', optimizer=optimizer, loss=discriminator_loss, global_steps=global_step, clip_norm=args.clip_norm)
        
     generator_summary, discriminator_summary = utils.summarize(da_model.summary, args.t2s_task) 
-    #utils.config_summary(log_dir, config)
+    utils.config_summary(save_dir, adversarial_weight, cyclic_weight, task_weight, discriminator_step, generator_step)
     sess.run(tf.group(tf.global_variables_initializer(), tf.local_variables_initializer()))
 
     coord = tf.train.Coordinator()
@@ -125,13 +129,13 @@ def train(sess, args, config):
     try:
         for iter_count in range(args.max_iter):
             # Update discriminator
-            for disc_iter in range(config.getint(model_type, 'discriminator_step')):
+            for disc_iter in range(discriminator_step):
                 d_loss, _, steps, disc_sum = sess.run([discriminator_loss, d_optim, global_step, discriminator_summary])
                 writer.add_summary(disc_sum, steps)
                 #print('Step: %d, discriminator loss: %.6f' % (steps, loss))
                 tf.logging.info('Step: %d: Discriminator loss=%.5f', steps, d_loss)
 
-            for gen_iter in range(config.getint(model_type, 'generator_step')):
+            for gen_iter in range(generator_step):
                 g_loss, _, steps, gen_sum = sess.run([generator_loss, g_optim, global_step, generator_summary])
                 writer.add_summary(gen_sum, steps)
                 tf.logging.info('Step: %d: Generator loss=%.5f', steps, g_loss)
