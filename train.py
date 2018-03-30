@@ -141,7 +141,7 @@ def train(sess, args, config):
 
             for gen_iter in range(generator_step):
                 g_loss, _, steps, gen_sum = sess.run([generator_loss, g_optim, global_step, generator_summary])
-                #writer.add_summary(gen_sum, steps)
+                writer.add_summary(gen_sum, steps)
                 tf.logging.info('Step %d: Generator loss=%.5f', steps, g_loss)
             
             if (iter_count+1) % args.save_interval == 0:

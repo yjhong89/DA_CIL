@@ -44,7 +44,7 @@ def summarize(summary_set, t2s_option):
     s2t_summary = _summarize_transferred_grid(summary_set['source_image'], summary_set['source_transferred'], name='S2T')
     t2s_summary = _summarize_transferred_grid(summary_set['target_image'], summary_set['target_transferred'], name='T2S')
     s2t2s_summary = _summarize_transferred_grid(summary_set['source_image'], summary_set['back2source'], name='S2T2S')
-    t2s2t_summary = _summarize_transferred_grid(summary_set['target_image'], summary_set['back2target'], name='T2ST2')
+    t2s2t_summary = _summarize_transferred_grid(summary_set['target_image'], summary_set['back2target'], name='T2S2T')
 
     discriminator_merged = [s2t_d_loss_summary, t2s_d_loss_summary, task_loss_summary, t2s_task_loss_summary, discriminator_loss_summary]
     generator_merged = [cyclic_summary, generator_loss_summary, s2t_summary, t2s_summary, s2t2s_summary, t2s2t_summary]
@@ -107,7 +107,8 @@ def _summarize_transferred_grid(source_images, transferred_images=None, name='Im
         grid = _image_grid(source_images)
 
     # max_outputs: max number of batch to generate images
-    return tf.summary.image(name, grid, max_outputs=1)
+    # name/Image
+    return tf.summary.image('%s_image_grid' % name, grid, max_outputs=1)
 
 def config_summary(save_dir, adversarial_weight, cyclic_weight, task_weight, discriminator_step, generator_step):
     if not os.path.exists(save_dir):
