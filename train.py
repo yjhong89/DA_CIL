@@ -28,11 +28,14 @@ def _get_trainable_vars(scope):
 
     return var_list
 
-def _gradient_clip(name, optimizer, loss, global_steps, clip_norm=5.0):
+def _gradient_clip(name, optimizer, loss, global_steps=None, clip_norm=5.0):
     var_list = _get_trainable_vars(name)
     grds, var = zip(*optimizer.compute_gradients(loss, var_list=var_list))
     gradients = [gradient if gradient is None else tf.clip_by_norm(gradient, 5.0) for gradient in grds]
-    optim = optimizer.apply_gradients(zip(gradients, var), global_step=global_steps)
+    if global_steps is not None:
+        optim = optimizer.apply_gradients(zip(gradients, var), global_step=global_steps)
+    else:
+        optim = optimizer.apply_gradients(zip(gradients, var))
     return optim
 
 def train(sess, args, config):
@@ -63,6 +66,8 @@ def train(sess, args, config):
 
     writer = tf.summary.FileWriter(save_dir, sess.graph)
     global_step = tf.train.get_or_create_global_step()
+
+    saver = tf.train.Saver(max_to_keep=5)
 
 
     if model_type == 'da_cil':
@@ -132,13 +137,17 @@ def train(sess, args, config):
             for disc_iter in range(discriminator_step):
                 d_loss, _, steps, disc_sum = sess.run([discriminator_loss, d_optim, global_step, discriminator_summary])
                 writer.add_summary(disc_sum, steps)
-                #print('Step: %d, discriminator loss: %.6f' % (steps, loss))
-                tf.logging.info('Step: %d: Discriminator loss=%.5f', steps, d_loss)
+                tf.logging.info('Step %d: Discriminator loss=%.5f', steps, d_loss)
 
             for gen_iter in range(generator_step):
                 g_loss, _, steps, gen_sum = sess.run([generator_loss, g_optim, global_step, generator_summary])
-                writer.add_summary(gen_sum, steps)
-                tf.logging.info('Step: %d: Generator loss=%.5f', steps, g_loss)
+                #writer.add_summary(gen_sum, steps)
+                tf.logging.info('Step %d: Generator loss=%.5f', steps, g_loss)
+            
+            if (iter_count+1) % args.save_interval == 0:
+                saver.save(sess, os.path.join(save_dir, model_type), global_step=iter_count)
+                tf.logging.info('Checkpoint save')
+
         
     except tf.errors.OutOfRangeError:
         print('Epoch limited')

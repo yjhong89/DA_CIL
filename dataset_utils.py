@@ -278,13 +278,18 @@ def get_batches(dataset_name, split_name, tfrecord_dir, batch_size):
 
         # currently, image dtype: uint8
         [image, label] = provider.get(['image', 'label'])
+        # Images that are represented using floating point values are expected to have values in the range [0,1)
+        # convert_image_dtype converts data type and scaling values
         image = tf.image.convert_image_dtype(image, tf.float32)
-        image = tf.image.per_image_standardization(image)
+        #image = tf.image.per_image_standardization(image)
+        image -= 0.5
+        image *= 2
 
         image_batch, label_batch = tf.train.shuffle_batch([image, label], batch_size=batch_size, 
                 capacity=batch_size*10, num_threads=10, min_after_dequeue=batch_size*2)
 
-        image_batch = tf.image.resize_images(image_batch, [360, 640])
+        # If increase image size, results in OOM
+        image_batch = tf.image.resize_images(image_batch, [90, 160])
         
         # [batch, 1] -> [batch size, 1, 9]
         label_batch = slim.one_hot_encoding(label_batch, 9)

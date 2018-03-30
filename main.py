@@ -15,7 +15,7 @@ def main():
     parser.add_argument('-d', '--delete', action='store_true')
     parser.add_argument('-l', '--log', action='store_true')
     parser.add_argument('--config', default='config.ini')
-    parser.add_argument('--batch_size', type=int, default=32)
+    parser.add_argument('--batch_size', type=int, default=16)
     parser.add_argument('--clip_norm', type=float, default=5.0)
     parser.add_argument('--optimizer', type=str, default='adam')
     parser.add_argument('--training', type=utils.str2bool, default='t')
@@ -24,6 +24,7 @@ def main():
     parser.add_argument('--learning_rate', type=float, default=0.0001)
     parser.add_argument('--lr_decay', type=utils.str2bool, default='y')
     parser.add_argument('--input_mask', type=utils.str2bool, default='t')
+    parser.add_argument('--save_interval', type=int, default=1000)
    
 
     args = parser.parse_args()

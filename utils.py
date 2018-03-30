@@ -120,3 +120,6 @@ def config_summary(save_dir, adversarial_weight, cyclic_weight, task_weight, dis
         f.write('\nDiscriminator step : ' + str(discriminator_step))
         f.write('\nGenerator step : ' + str(generator_step))
         f.close()
+
+
+
