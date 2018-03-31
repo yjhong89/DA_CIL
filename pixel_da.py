@@ -69,7 +69,7 @@ class model():
             if self.args.t2s_task:
                 self.t2s_head_logits, self.t2s_lateral_logits = self.transferred_classifier(self.g_t2s, reuse_private=False, reuse_shared=True, shared='transferred_shared', private='t2s_private')
 
-    def create_objective(self, head_labels, lateral_labels):
+    def create_objective(self, head_labels, lateral_labels, mode='LS'):
         with tf.name_scope('cyclic'):
             self.s2t_cyclic_loss = losses.cyclic_loss(self.summary['source_image'], self.s2t2s)
             self.t2s_cyclic_loss = losses.cyclic_loss(self.summary['target_image'], self.t2s2t)
@@ -77,8 +77,8 @@ class model():
         
         # Wasserstein with gradient-penalty
         with tf.name_scope('adversarial'):
-            self.s2t_g_loss, self.s2t_d_loss = losses.adversarial_loss(self.g_s2t, self.summary['target_image'], self.target_real, self.s2t_fake, mode='LS', discriminator=self.discriminator, discriminator_name='D_S2T')
-            self.t2s_g_loss, self.t2s_d_loss = losses.adversarial_loss(self.g_t2s, self.summary['source_image'], self.source_real, self.t2s_fake, mode='LS', discriminator=self.discriminator, discriminator_name='D_T2S')
+            self.s2t_g_loss, self.s2t_d_loss = losses.adversarial_loss(self.g_s2t, self.summary['target_image'], self.target_real, self.s2t_fake, mode=mode, discriminator=self.discriminator, discriminator_name='D_S2T')
+            self.t2s_g_loss, self.t2s_d_loss = losses.adversarial_loss(self.g_t2s, self.summary['source_image'], self.source_real, self.t2s_fake, mode=mode, discriminator=self.discriminator, discriminator_name='D_T2S')
             self.summary['s2t_d_loss'] = self.s2t_d_loss
             self.summary['t2s_d_loss'] = self.t2s_d_loss            
 

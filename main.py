@@ -23,9 +23,9 @@ def main():
     parser.add_argument('--t2s_task', type=utils.str2bool, default='t')
     parser.add_argument('--learning_rate', type=float, default=0.0001)
     parser.add_argument('--lr_decay', type=utils.str2bool, default='y')
-    parser.add_argument('--input_mask', type=utils.str2bool, default='t')
+    parser.add_argument('--input_mask', type=utils.str2bool, default='f')
     parser.add_argument('--save_interval', type=int, default=1000)
-   
+    parser.add_argument('--mode', type=str, default='LS')   
 
     args = parser.parse_args()
     if args.log:

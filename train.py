@@ -100,7 +100,7 @@ def train(sess, args, config):
             da_model(source_image_batch, target_image_batch)
 
         with tf.name_scope(model_type + '_objectives'):
-            da_model.create_objective(source_head_label_batch, source_lateral_label_batch)
+            da_model.create_objective(source_head_label_batch, source_lateral_label_batch, args.mode)
 
             generator_loss = cyclic_weight * (da_model.s2t_cyclic_loss + da_model.t2s_cyclic_loss) + adversarial_weight * (da_model.s2t_g_loss + da_model.t2s_g_loss)
             da_model.summary['generator_loss'] = generator_loss

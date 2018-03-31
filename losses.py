@@ -7,17 +7,43 @@ def cyclic_loss(origin, back2origin):
 
 def adversarial_loss(real_sample, fake_sample, real_logits, fake_logits, discriminator, mode='WGP', discriminator_name='D_S2T', gp_lambda=10):
     def gp(real, fake, name):
-        epsilon = tf.random_uniform([], maxval=1.0)
+        batch_size, _,_,_ = real.get_shape().as_list()
+        # Get different epsilon for each samples in a batch
+        epsilon = tf.random_uniform([batch_size, 1, 1, 1], maxval=1.0)
         x_hat = epsilon * real + (1 - epsilon) * fake
-        # 70x70 patch GAN
+        # 70x70 patch GAN, [batch size, 12, 20, 1]
         discriminator_logits = discriminator(x_hat, reuse=True, name=name)
-        # tf.gradient returns list of sum dy/dx for each xs in x
-        gradient = tf.gradients(discriminator_logits, [x_hat])[0]
-        gradient_l2_norm = tf.sqrt(tf.square(gradient))
-        # Expectation over batches
-        gradient_penalty = tf.reduce_mean(tf.reduce_sum(tf.square(gradient_l2_norm - 1.0), axis=[1,2,3]))
+        d_logits = tf.reshape(discriminator_logits, [batch_size, -1])
+        '''
+            TypeError: 'Tensor' object is not iterable
+            Use tf.while_loop(condition, body, loop_vars)
+        '''
+        each_logits = tf.unstack(d_logits, axis=1)        
+        # Track both the loop index and summation in a tuple form
+        index_summation = (tf.constant(0), tf.constant(0))
+        # The loop condition, i < 12*20
+        def condition(index, summation):
+            return tf.less(index, tf.shape(each_logits)[0])
 
-        return gradient_penalty
+        def body(index, summation):
+            gradient_i = tf.gather(each_logits, index)
+            # gradient summation for different samples in a batch, differentiation would be 0 for diffenent samples because they are independent
+                # d(D(x2))/dx1 = 0
+            gradient = tf.gradients(gradient_i, [x_hat])[0]
+            gradient_l2_norm = tf.sqrt(tf.square(gradients))
+            gradient_penalty = tf.reduce_mean(tf.reduce_sum(tf.square(gradient_l2_norm - 1.0), axis=[1,2,3]))
+
+            return tf.add(index+1), tf.add(summation, gradient_penalty)
+
+        return tf.while_loop(condition, body, index_summation)[1]
+
+#        # tf.gradient returns list of sum dy/dx for each xs in x
+#        gradient = tf.gradients(discriminator_logits, [x_hat])[0]
+#        gradient_l2_norm = tf.sqrt(tf.square(gradient))
+#        # Expectation over batches
+#        gradient_penalty = tf.reduce_mean(tf.reduce_sum(tf.square(gradient_l2_norm - 1.0), axis=[1,2,3]))
+#
+#        return gradient_penalty
 
     if mode == 'WGP':
         g_loss = -tf.reduce_mean(tf.reduce_sum(fake_logits, [1,2,3]))

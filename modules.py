@@ -150,7 +150,7 @@ class discriminator(object):
                 # After the last layer, a convolution is applied to map to a 1 dimensional output
                 x = op.conv2d(x, out_channel=1, stride=1, name='conv2d_%d'%layer_index)
 
-        return x
+        return tf.sigmoid(x)
 
 class task_regression(object):
     def __init__(self, channel, image_fc, measurement_fc, command_fc, dropout, name='task_regression'):
