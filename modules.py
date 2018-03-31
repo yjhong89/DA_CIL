@@ -145,7 +145,7 @@ class discriminator(object):
                 layer_index += 1
                 x = op.conv2d(x, out_channel=self.channel*4, name='conv2d_%d'%layer_index)
                 layer_index += 1
-                x = op.conv2d(x, out_channel=self.channel*8, name='conv2d_%d'%layer_index)
+                x = op.conv2d(x, out_channel=self.channel*8, stride=1, name='conv2d_%d'%layer_index)
                 layer_index += 1
                 # After the last layer, a convolution is applied to map to a 1 dimensional output
                 x = op.conv2d(x, out_channel=1, stride=1, name='conv2d_%d'%layer_index)
@@ -277,7 +277,8 @@ class task_classifier(object):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     args = parser.parse_args()
-    g = generator(64)
-    x = tf.get_variable('test', [10, 320,180,3])
-    g.generator_drn(x, name='g')
+    d = discriminator(64)
+    x = tf.get_variable('test', [10, 90, 160,3])
+    d(x, name='d')
+    #g.generator_drn(x, name='g')
             

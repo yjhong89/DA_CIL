@@ -103,7 +103,7 @@ def conv2d(x, out_channel, filter_size=4, stride=2, name='conv2d', activation=_l
 
         #print('convolution', output.get_shape().as_list())
 
-        return output
+    return output
 
 # size_out = stride*(size_in) + filter_size - 2*pad
 # Literally transposed version of convolution

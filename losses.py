@@ -13,9 +13,9 @@ def adversarial_loss(real_sample, fake_sample, real_logits, fake_logits, discrim
         discriminator_logits = discriminator(x_hat, reuse=True, name=name)
         # tf.gradient returns list of sum dy/dx for each xs in x
         gradient = tf.gradients(discriminator_logits, [x_hat])[0]
-        gradient_l2_norm = tf.sqrt(tf.reduce_sum(tf.square(gradient), axis=[1,2,3]))
+        gradient_l2_norm = tf.sqrt(tf.square(gradient))
         # Expectation over batches
-        gradient_penalty = tf.reduce_mean(tf.square(gradient_l2_norm - 1.0))
+        gradient_penalty = tf.reduce_mean(tf.reduce_sum(tf.square(gradient_l2_norm - 1.0), axis=[1,2,3]))
 
         return gradient_penalty
 
@@ -27,6 +27,11 @@ def adversarial_loss(real_sample, fake_sample, real_logits, fake_logits, discrim
         gradient_penalty = gp(real_sample, fake_sample, discriminator_name)
         d_loss = d_fake_loss - d_real_loss + gradient_penalty * gp_lambda
 
+    elif mode == 'LS':
+        g_loss = tf.reduce_mean(tf.reduce_sum(tf.square(fake_logits - 1), axis=[1,2,3]))
+        d_loss = tf.reduce_mean(tf.reduce_sum(tf.square(real_logits -1), axis=[1,2,3])) \
+                    + tf.reduce_mean(tf.reduce_sum(tf.square(fake_logits), axis=[1,2,3]))
+    
     return g_loss, d_loss
    
 def task_regression_loss(steer, acceleration, command, logits, acc_weight):
