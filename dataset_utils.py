@@ -221,7 +221,7 @@ def _augmentation(image, config):
         if config.getboolean(section, 'noise'):
             image = tf.cond(
                 tf.random_uniform([], maxval=1.0) < prob,
-                    lambda: image + tf.truncated_normal(tf.shape(image)) * tf.random_uniform([], 0, 0.1),
+                    lambda: image + tf.truncated_normal(tf.shape(image)) * tf.random_uniform([], 0, 0.05),
                     lambda: image)
 
     return image
