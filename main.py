@@ -26,6 +26,7 @@ def main():
     parser.add_argument('--input_mask', type=utils.str2bool, default='f')
     parser.add_argument('--save_interval', type=int, default=1000)
     parser.add_argument('--mode', type=str, default='LS')   
+    parser.add_argument('--load_ckpt', type=utils.str2bool, default='f')
 
     args = parser.parse_args()
     if args.log:

@@ -83,7 +83,7 @@ def train(sess, args, config):
     elif model_type == 'pixel_da':
         tf.logging.info('Training %s' % model_type)
         with tf.name_scope(model_type + '_batches'):
-            source_image_batch, source_label_batch = dataset_utils.get_batches('source', 'train', tfrecord_dir, batch_size=args.batch_size)
+            source_image_batch, source_label_batch = dataset_utils.get_batches('source', 'train', tfrecord_dir, batch_size=args.batch_size, config=config)
             mask_image_batch = source_image_batch[:,:,:,3]
             source_image_batch = source_image_batch[:,:,:,:3]
             if args.input_mask:
@@ -95,7 +95,7 @@ def train(sess, args, config):
             source_lateral_label_batch = (source_label_max_batch % 9) / 3
             source_head_label_batch = source_label_max_batch % 3
             
-            target_image_batch, _ = dataset_utils.get_batches('target', 'train', tfrecord_dir, batch_size=args.batch_size)
+            target_image_batch, _ = dataset_utils.get_batches('target', 'train', tfrecord_dir, batch_size=args.batch_size, config=config)
 
             da_model(source_image_batch, target_image_batch)
 
@@ -127,6 +127,12 @@ def train(sess, args, config):
     generator_summary, discriminator_summary = utils.summarize(da_model.summary, args.t2s_task) 
     utils.config_summary(save_dir, adversarial_weight, cyclic_weight, task_weight, discriminator_step, generator_step)
     sess.run(tf.group(tf.global_variables_initializer(), tf.local_variables_initializer()))
+
+    if args.load_ckpt:
+        ckpt = tf.train.get_checkpoint_state(save_dir)
+        if ckpt and ckpt.model_checkpoint_path:
+            ckpt_name = os.path.basename(ckpt.model_checkpoint_path)
+            saver.restore(sess, ckpt_name)
 
     coord = tf.train.Coordinator()
     threads = tf.train.start_queue_runners(sess, coord)

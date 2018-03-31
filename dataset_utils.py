@@ -2,6 +2,7 @@ import tensorflow as tf
 import h5py
 import os
 import glob
+import inspect
 import numpy as np
 import sys
 import tensorflow.contrib.slim as slim
@@ -183,43 +184,44 @@ def load_data(tfrecord_dir, whether_for_source, data_type, config):
 
     return image, labels, command
 
+# Image value: float type [0,1]
 def _augmentation(image, config):
     # inspect.stack get function name
-    section = inspect.stack()[0][3]
+    section = inspect.stack()[0][3][1:]
     prob = config.getfloat(section, 'probability')
     with tf.name_scope(section):
         # Based on HSV, (Hue, Saturation, Value)
             # Hue: color, Saturation: intensity of color, Value: brightness of color
-        # Saturation is the intensity of a color, determines the strength of a particular color
+        # Saturation is the intensity of a color.
         # Make color look richer, more vivid
         if config.getboolean(section, 'random_saturation'):
             image = tf.cond(
                 tf.random_uniform([], maxval=1.0) < prob,
-                    lambda: tf.image.random_saturation(image, lower=0.5, upper=1.5),
+                    lambda: tf.image.random_saturation(image, lower=0.8, upper=1.5),
                     lambda: image)
         if config.getboolean(section, 'random_brightness'):
             image = tf.cond(
                 tf.random_uniform([], maxval=1.0) < prob,
-                    lambda: tf.image.random_brightness(image, max_delta=63),
+                    lambda: tf.image.random_brightness(image, max_delta=0.1),
                     lambda: image)
         # Hue is color
         if config.getboolean(section, 'random_hue'):
             image = tf.cond(
                 tf.random_uniform([], maxval=1.0) < prob,
-                    lambda: tf.image.random_hue(image, max_delta=0.032),
+                    lambda: tf.image.random_hue(image, max_delta=0.005),
                     lambda: image)
         # Contrast is the difference between amximum and minimum pixel intensity
             # Dark parts darker and the light parts lighter
         if config.getboolean(section, 'random_contrast'):
             image = tf.cond(
                 tf.random_uniform([], maxval=1.0) < prob,
-                    lambda: tf.image.random_contrast(image, lower=0.5, upper=1.5),
+                    lambda: tf.image.random_contrast(image, lower=0.8, upper=1.5),
                     lambda: image)
         # Gaussian noise
         if config.getboolean(section, 'noise'):
             image = tf.cond(
                 tf.random_uniform([], maxval=1.0) < prob,
-                    lambda: image + tf.truncated_normal(tf.shape(image)) * tf.random_uniform([], 5, 15),
+                    lambda: image + tf.truncated_normal(tf.shape(image)) * tf.random_uniform([], 0, 0.1),
                     lambda: image)
 
     return image
@@ -235,7 +237,7 @@ _TARGET_ITEMS_TO_DESCRIPTIONS = {
             'image': 'A [180x320x3]',
             'label': 'A single integer between 0 and 8'}
 
-def get_batches(dataset_name, split_name, tfrecord_dir, batch_size):
+def get_batches(dataset_name, split_name, tfrecord_dir, batch_size, config=None):
     tfrecord_path = os.path.join(os.getcwd(), tfrecord_dir, '%s_%s.tfrecord' % (dataset_name, split_name))
     if not isinstance(tfrecord_path, (tuple, list)):
         tfrecord_path = [tfrecord_path]
@@ -275,15 +277,28 @@ def get_batches(dataset_name, split_name, tfrecord_dir, batch_size):
         
         provider = slim.dataset_data_provider.DatasetDataProvider(slim_dataset, num_readers=4, common_queue_capacity=20*batch_size, common_queue_min=10*batch_size)
 
-
         # currently, image dtype: uint8
         [image, label] = provider.get(['image', 'label'])
+        
         # Images that are represented using floating point values are expected to have values in the range [0,1)
         # convert_image_dtype converts data type and scaling values
         image = tf.image.convert_image_dtype(image, tf.float32)
-        #image = tf.image.per_image_standardization(image)
+
+        if config.getboolean('config', 'augmentation'):
+            # Augmentation
+            if dataset_name == 'source':
+                image_ = image[:,:,:3]
+                mask_ = tf.expand_dims(image[:,:,3], axis=2)
+                image_ = _augmentation(image_, config)
+                image = tf.concat([image_, mask_], axis=2)
+            elif dataset_name == 'target':
+                image = _augmentation(image, config)
+                
+        # Need to clip value
+        image = tf.clip_by_value(image, 0, 1.0)
         image -= 0.5
         image *= 2
+#        image = tf.image.per_image_standardization(image)
 
         image_batch, label_batch = tf.train.shuffle_batch([image, label], batch_size=batch_size, 
                 capacity=batch_size*10, num_threads=10, min_after_dequeue=batch_size*2)
@@ -359,19 +374,17 @@ def check_tfrecord(dataset_name, split_name, tfrecord_dir):
 
 
 if __name__ == "__main__":
-    c = tf.get_variable('a', [3,4]) 
 
     with tf.Session() as sess:
 
-        a, b = get_batches('source', 'train', 'pixel_da', 10)
+        a, b, c = get_batches('source', 'train', 'pixel_da', 1)
         #check_tfrecord('target', 'train', 'pixel_da')
         sess.run(tf.group(tf.global_variables_initializer(), tf.local_variables_initializer()))
         coord = tf.train.Coordinator()
         threads = tf.train.start_queue_runners(sess=sess, coord=coord)
 
         print(sess.run(a))
-        print(sess.run(a).shape)
-        print(sess.run(b))
+        print(sess.run(c))
 
         coord.request_stop()
         coord.join(threads)
