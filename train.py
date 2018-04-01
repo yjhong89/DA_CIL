@@ -156,9 +156,9 @@ def train(sess, args, config):
 
             if (iter_count+1) % args.summary_interval == 0:
                 disc_sum, gen_sum = sess.run([discriminator_summary, generator_summary])
-                writer.add_summary(disc_sum, iter_count)
-                writer.add_summary(gen_sum, iter_count)
-                tf.logging.info('Summary at %d step' % iter_count)
+                writer.add_summary(disc_sum, iter_count+1)
+                writer.add_summary(gen_sum, iter_count+1)
+                tf.logging.info('Summary at %d step' % iter_count+1)
 
         
     except tf.errors.OutOfRangeError:
