@@ -69,6 +69,11 @@ class model():
             if self.args.t2s_task:
                 self.t2s_head_logits, self.t2s_lateral_logits = self.transferred_classifier(self.g_t2s, reuse_private=False, reuse_shared=True, shared='transferred_shared', private='t2s_private')
 
+            # Evaluation
+            if not self.args.training:
+                self.target_head_logits, self.target_lateral_logits = self.transferred_classifier(self.summary['target'], reuse_private=True, reuse_shared=True, shared='transferred_shared', private='transferred_private')
+                self.soure_head_logits, self.source_lateral_logits = self.transferred_classifer(self.summary['source'], reuse_private=True, reuse_shared=True, shared=transferred_shared, priate='t2s_private')
+
     def create_objective(self, head_labels, lateral_labels, mode='LS'):
         with tf.name_scope('cyclic'):
             self.s2t_cyclic_loss = losses.cyclic_loss(self.summary['source_image'], self.s2t2s)

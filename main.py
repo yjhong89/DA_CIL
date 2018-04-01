@@ -25,6 +25,7 @@ def main():
     parser.add_argument('--lr_decay', type=utils.str2bool, default='y')
     parser.add_argument('--input_mask', type=utils.str2bool, default='f')
     parser.add_argument('--save_interval', type=int, default=1000)
+    parser.add_argument('--summary_interval', type=int, default=100)
     parser.add_argument('--mode', type=str, default='LS')   
     parser.add_argument('--load_ckpt', type=utils.str2bool, default='f')
 

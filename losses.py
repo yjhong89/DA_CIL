@@ -20,7 +20,8 @@ def adversarial_loss(real_sample, fake_sample, real_logits, fake_logits, discrim
         '''
         each_logits = tf.unstack(d_logits, axis=1)        
         # Track both the loop index and summation in a tuple form
-        index_summation = (tf.constant(0), tf.constant(0))
+            # Summation would be float32
+        index_summation = (tf.constant(0), tf.constant(0.0))
         # The loop condition, i < 12*20
         def condition(index, summation):
             return tf.less(index, tf.shape(each_logits)[0])
@@ -30,10 +31,10 @@ def adversarial_loss(real_sample, fake_sample, real_logits, fake_logits, discrim
             # gradient summation for different samples in a batch, differentiation would be 0 for diffenent samples because they are independent
                 # d(D(x2))/dx1 = 0
             gradient = tf.gradients(gradient_i, [x_hat])[0]
-            gradient_l2_norm = tf.sqrt(tf.square(gradients))
-            gradient_penalty = tf.reduce_mean(tf.reduce_sum(tf.square(gradient_l2_norm - 1.0), axis=[1,2,3]))
+            gradient_l2_norm = tf.sqrt(tf.reduce_sum(tf.square(gradient), axis=[1,2,3]))
+            gradient_penalty = tf.reduce_mean(tf.square(gradient_l2_norm - 1.0))
 
-            return tf.add(index+1), tf.add(summation, gradient_penalty)
+            return tf.add(index, 1), tf.add(summation, gradient_penalty)
 
         return tf.while_loop(condition, body, index_summation)[1]
 

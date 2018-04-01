@@ -97,7 +97,7 @@ def train(sess, args, config):
             
             target_image_batch, _ = dataset_utils.get_batches('target', 'train', tfrecord_dir, batch_size=args.batch_size, config=config)
 
-            da_model(source_image_batch, target_image_batch)
+        da_model(source_image_batch, target_image_batch)
 
         with tf.name_scope(model_type + '_objectives'):
             da_model.create_objective(source_head_label_batch, source_lateral_label_batch, args.mode)
@@ -141,18 +141,24 @@ def train(sess, args, config):
         for iter_count in range(args.max_iter):
             # Update discriminator
             for disc_iter in range(discriminator_step):
-                d_loss, _, steps, disc_sum = sess.run([discriminator_loss, d_optim, global_step, discriminator_summary])
-                writer.add_summary(disc_sum, steps)
+                d_loss, _, steps = sess.run([discriminator_loss, d_optim, global_step])
+                #writer.add_summary(disc_sum, steps)
                 tf.logging.info('Step %d: Discriminator loss=%.5f', steps, d_loss)
 
             for gen_iter in range(generator_step):
-                g_loss, _, steps, gen_sum = sess.run([generator_loss, g_optim, global_step, generator_summary])
-                writer.add_summary(gen_sum, steps)
+                g_loss, _, steps = sess.run([generator_loss, g_optim, global_step])
+                #writer.add_summary(gen_sum, steps)
                 tf.logging.info('Step %d: Generator loss=%.5f', steps, g_loss)
             
             if (iter_count+1) % args.save_interval == 0:
                 saver.save(sess, os.path.join(save_dir, model_type), global_step=iter_count)
                 tf.logging.info('Checkpoint save')
+
+            if (iter_count+1) % args.summary_interval == 0:
+                disc_sum, gen_sum = sess.run([discriminator_summary, generator_summary])
+                writer.add_summary(disc_sum, iter_count)
+                writer.add_summary(gen_sum, iter_count)
+                tf.logging.info('Summary at %d step' % iter_count)
 
         
     except tf.errors.OutOfRangeError:
