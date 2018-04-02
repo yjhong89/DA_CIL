@@ -58,6 +58,9 @@ def adversarial_loss(real_sample, fake_sample, real_logits, fake_logits, discrim
         g_loss = tf.reduce_mean(tf.reduce_sum(tf.square(fake_logits - 1), axis=[1,2,3]))
         d_loss = tf.reduce_mean(tf.reduce_sum(tf.square(real_logits - 1), axis=[1,2,3])) \
                     + tf.reduce_mean(tf.reduce_sum(tf.square(fake_logits), axis=[1,2,3]))
+
+    else:
+        raise ValueError('%s is not supported' % mode)
     
     return g_loss, d_loss
    
