@@ -44,6 +44,7 @@ def train(sess, args, config):
     tfrecord_dir = os.path.join(base_dir, config.get(model_type, 'tfrecord'))
     log_dir = os.path.join(base_dir, config.get('config', 'logdir'))
     to_save_dir = config.get('config', 'savedir')
+    adversarial_mode = config.get('config', 'mode')
 
     adversarial_weight = config.getfloat(model_type, 'adversarial_weight')
     cyclic_weight = config.getfloat(model_type, 'cyclic_weight')
@@ -100,7 +101,7 @@ def train(sess, args, config):
         da_model(source_image_batch, target_image_batch)
 
         with tf.name_scope(model_type + '_objectives'):
-            da_model.create_objective(source_head_label_batch, source_lateral_label_batch, args.mode)
+            da_model.create_objective(source_head_label_batch, source_lateral_label_batch, adversarial_mode)
 
             generator_loss = cyclic_weight * (da_model.s2t_cyclic_loss + da_model.t2s_cyclic_loss) + adversarial_weight * (da_model.s2t_g_loss + da_model.t2s_g_loss)
             da_model.summary['generator_loss'] = generator_loss
@@ -125,7 +126,7 @@ def train(sess, args, config):
         d_optim = _gradient_clip(name='discriminator', optimizer=optimizer, loss=discriminator_loss, global_steps=global_step, clip_norm=args.clip_norm)
        
     generator_summary, discriminator_summary = utils.summarize(da_model.summary, args.t2s_task) 
-    utils.config_summary(save_dir, adversarial_weight, cyclic_weight, task_weight, discriminator_step, generator_step)
+    utils.config_summary(save_dir, adversarial_weight, cyclic_weight, task_weight, discriminator_step, generator_step, adversarial_mode)
     sess.run(tf.group(tf.global_variables_initializer(), tf.local_variables_initializer()))
 
     if args.load_ckpt:

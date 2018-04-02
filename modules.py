@@ -6,9 +6,18 @@ import argparse
 import dataset_utils
 
 class generator(object):
-    def __init__(self, channel):
+    def __init__(self, channel, config, batch_size):
         self.channel = channel
         self.module_name = 'generator'
+        self.config = config
+
+        self.latent_vars = dict()
+        # Add latent noise vector to image input
+        if self.config.getboolean(self.module_name, 'noise'):
+            tf.logging.info('Using random noise')
+            noise = tf.random_uniform(shape=[batch_size, self.config.getint(self.module_name, 'noise_dim')], minval=-1, maxval=1, dtype=tf.float32, name='random_noise')
+            self.latent_vars['noise'] = noise
+
 
     # Build model
     # From image-to-image translation
@@ -76,6 +85,13 @@ class generator(object):
             with tf.variable_scope(name+'_DRN'):
                 if reuse:
                     tf.get_variable_scope().reuse_variables()
+
+                if self.latent_vars:
+                    noise_channel = project_latent_vars(shape=x.get_shape().as_list()[0:3]+[1],
+                                        latent_vars=self.latent_vars,
+                                        combine_method='concat', name=name)
+                    x = tf.concat([x, noise_channel], axis=3)
+
                 # image_size - fiter_size + 2*pad + 1 (when stride=1)
                 x = tf.pad(x, [[0,0],[3,3],[3,3],[0,0]], 'SYMMETRIC')
                 x = op.conv2d(x, out_channel=self.channel, filter_size=7, stride=1, activation=tf.nn.relu, padding='VALID', name='conv2d_%d'%layer_index)
@@ -119,6 +135,29 @@ class generator(object):
 
         return tf.nn.tanh(x)
 
+
+def project_latent_vars(shape, latent_vars, combine_method, name):
+    values = list()
+    # Keys
+    for var in latent_vars:
+        with tf.variable_scope(var):
+            # Project and reshape noise to NHWC
+            projected = op.fc(latent_vars[var], np.prod(shape[1:]), dropout=False, name=name+var)
+        values.append(tf.reshape(projected, [shape[0]] + shape[1:]))
+
+    if combine_method == 'sum':
+        result = values[0]
+        for value in values[1:]:
+            result += value
+    elif combine_method == 'concat':
+        # Concatenate along last axis
+        result = tf.concat(values, axis=3)
+    else:
+        raise ValueError('Unknown combine method %s' % combine_method)
+
+    tf.logging.info('Latent variables for %s projected to size %s volume' % (name, result.shape))
+
+    return result
 
 
 class discriminator(object):
