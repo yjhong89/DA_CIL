@@ -31,7 +31,7 @@ def summarize(summary_set, t2s_option):
     # Loss part
     cyclic_summary = tf.summary.scalar('cyclic_loss', summary_set['cyclic_loss'])
     s2t_g_loss_summary = tf.summary.scalar('s2t_g_loss', summary_set['s2t_g_loss'])
-    t2s_g_loss_summary = tf.summary.scalar('t2s_g_loss', symmary_set['t2s_g_loss'])
+    t2s_g_loss_summary = tf.summary.scalar('t2s_g_loss', summary_set['t2s_g_loss'])
     s2t_d_loss_summary = tf.summary.scalar('s2t_d_loss', summary_set['s2t_d_loss'])
     t2s_d_loss_summary = tf.summary.scalar('t2s_d_loss', summary_set['t2s_d_loss'])
     task_loss_summary = tf.summary.scalar('task_loss', summary_set['task_loss'])
