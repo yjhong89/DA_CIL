@@ -53,10 +53,10 @@ def train(sess, args, config):
     generator_step = config.getint(model_type, 'generator_step')
     save_dir = os.path.join(log_dir, to_save_dir)
 
-    if args.delete:
+    if args.delete and os.path.exists(save_dir):
         shutil.rmtree(save_dir)
 	
-    os.makedirs(log_dir, exist_ok=True)
+    os.makedirs(save_dir, exist_ok=True)
     #if not os.path.exists(log_dir):
         #os.mkdir(log_dir)
 
