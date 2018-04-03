@@ -54,7 +54,7 @@ def train(sess, args, config):
     save_dir = os.path.join(log_dir, to_save_dir)
 
     if args.delete:
-        shutil.rmtree(log_dir)
+        shutil.rmtree(save_dir)
 	
     os.makedirs(log_dir, exist_ok=True)
     #if not os.path.exists(log_dir):
@@ -106,7 +106,7 @@ def train(sess, args, config):
             generator_loss = cyclic_weight * (da_model.s2t_cyclic_loss + da_model.t2s_cyclic_loss) + adversarial_weight * (da_model.s2t_g_loss + da_model.t2s_g_loss)
             da_model.summary['generator_loss'] = generator_loss
 
-            discriminator_loss = adversarial_weight * (da_model.s2t_d_loss + da_model.t2s_d_loss) + task_weight * (da_model.transferred_task_loss + da_model.t2s_task_loss)
+            discriminator_loss = (adversarial_weight * (da_model.s2t_d_loss + da_model.t2s_d_loss) + task_weight * (da_model.transferred_task_loss + da_model.t2s_task_loss)) / 2
             da_model.summary['discriminator_loss'] = discriminator_loss
 
     else:
@@ -159,7 +159,7 @@ def train(sess, args, config):
                 disc_sum, gen_sum = sess.run([discriminator_summary, generator_summary])
                 writer.add_summary(disc_sum, iter_count+1)
                 writer.add_summary(gen_sum, iter_count+1)
-                tf.logging.info('Summary at %d step' % iter_count+1)
+                tf.logging.info('Summary at %d step' % (iter_count+1))
 
         
     except tf.errors.OutOfRangeError:
