@@ -49,17 +49,26 @@ def adversarial_loss(real_sample, fake_sample, real_logits, fake_logits, discrim
 #        return gradient_penalty
 
     if mode == 'WGP':
-        g_loss = -tf.reduce_mean(tf.reduce_sum(fake_logits, [1,2,3]))
+#        g_loss = -tf.reduce_mean(tf.reduce_sum(fake_logits, [1,2,3]))
+#
+#        d_real_loss = tf.reduce_mean(tf.reduce_sum(real_logits, [1,2,3]))
+#        d_fake_loss = tf.reduce_mean(tf.reduce_sum(fake_logits, [1,2,3]))
+#        gradient_penalty = gp(real_sample, fake_sample, discriminator_name)
+#        d_loss = d_fake_loss - d_real_loss + gradient_penalty * gp_lambda
+        g_loss = -tf.reduce_mean(fake_logits)
 
-        d_real_loss = tf.reduce_mean(tf.reduce_sum(real_logits, [1,2,3]))
-        d_fake_loss = tf.reduce_mean(tf.reduce_sum(fake_logits, [1,2,3]))
+        d_real_loss = tf.reduce_mean(real_logits)
+        d_fake_loss = tf.reduce_mean(fake_logits)
         gradient_penalty = gp(real_sample, fake_sample, discriminator_name)
         d_loss = d_fake_loss - d_real_loss + gradient_penalty * gp_lambda
 
     elif mode == 'LS':
-        g_loss = tf.reduce_mean(tf.reduce_sum(tf.square(fake_logits - 1), axis=[1,2,3]))
-        d_loss = tf.reduce_mean(tf.reduce_sum(tf.square(real_logits - 1), axis=[1,2,3])) \
-                    + tf.reduce_mean(tf.reduce_sum(tf.square(fake_logits), axis=[1,2,3]))
+#        g_loss = tf.reduce_mean(tf.reduce_sum(tf.square(fake_logits - 1), axis=[1,2,3]))
+#        d_loss = tf.reduce_mean(tf.reduce_sum(tf.square(real_logits - 1), axis=[1,2,3])) \
+#                    + tf.reduce_mean(tf.reduce_sum(tf.square(fake_logits), axis=[1,2,3]))
+        g_loss = tf.reduce_mean((tf.square(fake_logits - 1)))
+        d_loss = tf.reduce_mean(tf.square(real_logits - 1)) \
+                    + tf.reduce_mean(tf.square(fake_logits))
 
     else:
         raise ValueError('%s is not supported' % mode)
