@@ -3,6 +3,7 @@ import tensorflow.contrib.slim as slim
 
 
 def cyclic_loss(origin, back2origin):
+    # Need to scale between loss terms
     return tf.reduce_mean(tf.abs(origin-back2origin))
     #return tf.reduce_mean(tf.reduce_sum(tf.abs(origin - back2origin), [1,2,3]))
 
