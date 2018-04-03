@@ -3,7 +3,8 @@ import tensorflow.contrib.slim as slim
 
 
 def cyclic_loss(origin, back2origin):
-    return tf.reduce_mean(tf.reduce_sum(tf.abs(origin - back2origin), [1,2,3]))
+    return tf.reduce_mean(tf.abs(origin-back2origin))
+    #return tf.reduce_mean(tf.reduce_sum(tf.abs(origin - back2origin), [1,2,3]))
 
 def adversarial_loss(real_sample, fake_sample, real_logits, fake_logits, discriminator, mode='WGP', discriminator_name='D_S2T', gp_lambda=10):
     def gp(real, fake, name):
