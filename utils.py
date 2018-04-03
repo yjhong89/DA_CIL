@@ -30,6 +30,8 @@ def str2bool(v):
 def summarize(summary_set, t2s_option):
     # Loss part
     cyclic_summary = tf.summary.scalar('cyclic_loss', summary_set['cyclic_loss'])
+    s2t_g_loss_summary = tf.summary.scalar('s2t_g_loss', summary_set['s2t_g_loss'])
+    t2s_g_loss_summary = tf.summary.scalar('t2s_g_loss', symmary_set['t2s_g_loss'])
     s2t_d_loss_summary = tf.summary.scalar('s2t_d_loss', summary_set['s2t_d_loss'])
     t2s_d_loss_summary = tf.summary.scalar('t2s_d_loss', summary_set['t2s_d_loss'])
     task_loss_summary = tf.summary.scalar('task_loss', summary_set['task_loss'])
@@ -47,7 +49,7 @@ def summarize(summary_set, t2s_option):
     t2s2t_summary = _summarize_transferred_grid(summary_set['target_image'], summary_set['back2target'], name='T2S2T')
 
     discriminator_merged = [s2t_d_loss_summary, t2s_d_loss_summary, task_loss_summary, t2s_task_loss_summary, discriminator_loss_summary]
-    generator_merged = [cyclic_summary, generator_loss_summary, s2t_summary, t2s_summary, s2t2s_summary, t2s2t_summary]
+    generator_merged = [cyclic_summary, s2t_g_loss_summary, t2s_g_loss_summary, generator_loss_summary, s2t_summary, t2s_summary, s2t2s_summary, t2s2t_summary]
 
     generator_merge_summary = tf.summary.merge(generator_merged)
     discriminator_merge_summary = tf.summary.merge(discriminator_merged)

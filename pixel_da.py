@@ -84,6 +84,8 @@ class model():
         with tf.name_scope('adversarial'):
             self.s2t_g_loss, self.s2t_d_loss = losses.adversarial_loss(self.g_s2t, self.summary['target_image'], self.target_real, self.s2t_fake, mode=mode, discriminator=self.discriminator, discriminator_name='D_S2T')
             self.t2s_g_loss, self.t2s_d_loss = losses.adversarial_loss(self.g_t2s, self.summary['source_image'], self.source_real, self.t2s_fake, mode=mode, discriminator=self.discriminator, discriminator_name='D_T2S')
+            self.summary['s2t_g_loss'] = self.s2t_g_loss
+            self.summary['t2s_g_loss'] = self.t2s_g_loss
             self.summary['s2t_d_loss'] = self.s2t_d_loss
             self.summary['t2s_d_loss'] = self.t2s_d_loss            
 
