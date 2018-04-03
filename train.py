@@ -45,6 +45,8 @@ def train(sess, args, config):
     log_dir = os.path.join(base_dir, config.get('config', 'logdir'))
     to_save_dir = config.get('config', 'savedir')
     adversarial_mode = config.get('config', 'mode')
+    whether_noise = config.getboolean('generator'. 'noise')
+    noise_dim = config.getint('generator', 'noise_dim')
 
     adversarial_weight = config.getfloat(model_type, 'adversarial_weight')
     cyclic_weight = config.getfloat(model_type, 'cyclic_weight')
@@ -126,7 +128,7 @@ def train(sess, args, config):
         d_optim = _gradient_clip(name='discriminator', optimizer=optimizer, loss=discriminator_loss, global_steps=global_step, clip_norm=args.clip_norm)
        
     generator_summary, discriminator_summary = utils.summarize(da_model.summary, args.t2s_task) 
-    utils.config_summary(save_dir, adversarial_weight, cyclic_weight, task_weight, discriminator_step, generator_step, adversarial_mode)
+    utils.config_summary(save_dir, adversarial_weight, cyclic_weight, task_weight, discriminator_step, generator_step, adversarial_mode, whether_noise, noise_dim)
     sess.run(tf.group(tf.global_variables_initializer(), tf.local_variables_initializer()))
 
     if args.load_ckpt:
