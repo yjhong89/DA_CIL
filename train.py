@@ -49,7 +49,8 @@ def train(sess, args, config):
 
     adversarial_weight = config.getfloat(model_type, 'adversarial_weight')
     s2t_cyclic_weight = config.getfloat(model_type, 's2t_cyclic_weight')
-    t2s_task_weight = config.getfloat(model_type, 't2s_task_weight')
+    t2s_cyclic_weight = config.getfloat(model_type, 't2s_cyclic_weight')
+    task_weight = config.getfloat(model_type, 't2s_task_weight')
     discriminator_step = config.getint(model_type, 'discriminator_step')
     generator_step = config.getint(model_type, 'generator_step')
     save_dir = os.path.join(log_dir, utils.make_savedir(config))

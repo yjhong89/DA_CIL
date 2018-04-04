@@ -153,8 +153,10 @@ def residual_block(x, out_dim, layer_index, dilation_rate=1, filter_size=3, down
             #print(r1.get_shape().as_list())
         else:
             if increase_dim:
+                r1 = dilated_conv2d(x, out_channel=out_dim, filter_size=filter_size, activation=tf.nn.relu, padding='SAME', dilation_rate=dilation_rate//2, name='conv2d_%d'%layer_index, normalization=normalization, training=training)
                 x = tf.pad(x, [[0,0],[0,0],[0,0],[in_dim//2,in_dim//2]], 'CONSTANT')
-            r1 = dilated_conv2d(r, out_channel=out_dim, filter_size=filter_size, activation=tf.nn.relu, padding='VALID', dilation_rate=dilation_rate, name='conv2d_%d'%layer_index, normalization=normalization, training=training)
+            else:
+                r1 = dilated_conv2d(r, out_channel=out_dim, filter_size=filter_size, activation=tf.nn.relu, padding='VALID', dilation_rate=dilation_rate, name='conv2d_%d'%layer_index, normalization=normalization, training=training)
         index = layer_index + 1
         r1 = tf.pad(r1, [[0,0],[pad,pad],[pad,pad],[0,0]], 'SYMMETRIC')
         r2 = dilated_conv2d(r1, out_channel=out_dim, filter_size=filter_size, activation=None, padding='VALID', dilation_rate=dilation_rate, name='conv2d_%d'%index, normalization=normalization, training=training)
