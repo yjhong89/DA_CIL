@@ -43,7 +43,6 @@ def train(sess, args, config):
     base_dir = os.path.expanduser(config.get('config', 'basedir'))
     tfrecord_dir = os.path.join(base_dir, config.get(model_type, 'tfrecord'))
     log_dir = os.path.join(base_dir, config.get('config', 'logdir'))
-    to_save_dir = config.get('config', 'savedir')
     adversarial_mode = config.get('config', 'mode')
     whether_noise = config.getboolean('generator', 'noise')
     noise_dim = config.getint('generator', 'noise_dim')
@@ -53,7 +52,7 @@ def train(sess, args, config):
     task_weight = config.getfloat(model_type, 'task_weight')
     discriminator_step = config.getint(model_type, 'discriminator_step')
     generator_step = config.getint(model_type, 'generator_step')
-    save_dir = os.path.join(log_dir, to_save_dir)
+    save_dir = os.path.join(log_dir, utils.make_savedir(config))
 
     if args.delete and os.path.exists(save_dir):
         shutil.rmtree(save_dir)
@@ -89,7 +88,7 @@ def train(sess, args, config):
             source_image_batch, source_label_batch = dataset_utils.get_batches('source', 'train', tfrecord_dir, batch_size=args.batch_size, config=config)
             mask_image_batch = source_image_batch[:,:,:,3]
             source_image_batch = source_image_batch[:,:,:,:3]
-            if args.input_mask:
+            if config.getboolean('config', 'input_mask'):
                 mask_images = tf.to_float(tf.greater(mask_image_batch, 0.99))
                 source_image_batch = tf.multiply(source_image_batch, tf.tile(tf.expand_dims(mask_images, 3), [1,1,1,3]))
             

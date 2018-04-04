@@ -18,6 +18,26 @@ def load_config(config, ini):
     config_file = os.path.expanduser(ini)
     config.read(config_file)
 
+def make_savedir(config):
+    model_type = config.get('config', 'experiment')
+    adversarial_mode = config.get('config', 'mode')
+   # augmentation = config.getboolean('config', 'augmentation')
+    noise = config.getboolean('generator', 'noise')
+    mask = config.getboolean('config', 'input_mask')
+
+    adversarial_weight = config.getint(model_type, 'adversarial_weight')
+    cyclic_weight = config.getint(model_type, 'cyclic_weight')
+    task_weight = config.getint(model_type, 'task_weight')
+
+    result = model_type + '_' + adversarial_mode
+
+    if noise:
+        if mask:
+            result = result + '_noise_mask'
+        else:
+            result = result + '_noise_wo_mask'
+
+    return result
 
 def str2bool(v):
     if v.lower() in ('true', 't', 'y', 'yes'):
