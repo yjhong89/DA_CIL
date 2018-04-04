@@ -7,7 +7,7 @@ def cyclic_loss(origin, back2origin):
     return tf.reduce_mean(tf.abs(origin-back2origin))
     #return tf.reduce_mean(tf.reduce_sum(tf.abs(origin - back2origin), [1,2,3]))
 
-def adversarial_loss(real_sample, fake_sample, real_logits, fake_logits, discriminator, mode='WGP', discriminator_name='D_S2T', gp_lambda=10):
+def adversarial_loss(real_sample, fake_sample, real_logits, fake_logits, discriminator, mode='WGP', discriminator_name='D_S2T', gp_lambda=10, rho=1e-5):
     def gp(real, fake, name):
         batch_size, _,_,_ = real.get_shape().as_list()
         # Get different epsilon for each samples in a batch
@@ -16,6 +16,7 @@ def adversarial_loss(real_sample, fake_sample, real_logits, fake_logits, discrim
         # 70x70 patch GAN, [batch size, 12, 20, 1]
         discriminator_logits = discriminator(x_hat, reuse=True, name=name)
         d_logits = tf.reshape(discriminator_logits, [batch_size, -1])
+        _, num_cols = d_logits.get_shape().as_list()
         '''
             TypeError: 'Tensor' object is not iterable
             Use tf.while_loop(condition, body, loop_vars)
@@ -35,8 +36,8 @@ def adversarial_loss(real_sample, fake_sample, real_logits, fake_logits, discrim
             gradient = tf.gradients(gradient_i, [x_hat])[0]
             gradient_l2_norm = tf.sqrt(tf.reduce_sum(tf.square(gradient), axis=[1,2,3]))
             gradient_penalty = tf.reduce_mean(tf.square(gradient_l2_norm - 1.0))
-
-            return tf.add(index, 1), tf.add(summation, gradient_penalty)
+            # Reduce mean
+            return tf.add(index, 1), tf.add(summation, gradient_penalty/num_cols)
 
         return tf.while_loop(condition, body, index_summation)[1]
 
@@ -69,6 +70,23 @@ def adversarial_loss(real_sample, fake_sample, real_logits, fake_logits, discrim
         g_loss = tf.reduce_mean((tf.square(fake_logits - 1)))
         d_loss = tf.reduce_mean(tf.square(real_logits - 1)) \
                     + tf.reduce_mean(tf.square(fake_logits))
+    elif mode == 'FISHER':
+        with tf.variable_scope(discriminator_name):
+            alpha = tf.get_variable('fisher_lambda', [], initializer=tf.constant_initializer(0))
+        
+        e_q_f = tf.reduce_mean(fake_logits)
+        e_p_f = tf.reduce_mean(real_logits)
+        e_q_f2 = tf.reduce_mean(tf.square(fake_logits))
+        e_p_f2 = tf.reduce_mean(tf.square(real_logits))
+
+        constraint = 1 - 0.5 * (e_p_f2 + e_q_f2)
+
+        g_loss = -tf.reduce_mean(e_q_f)
+        d_loss = -1 * (e_p_f - e_q_f + alpha*constraint - rho/2 * constraint**2)
+
+        alpha_opt = tf.train.GradientDescentOptimizer(rho).minimize(-d_loss, var_list=[alpha])
+
+        return g_loss, d_loss, alpha_opt
 
     else:
         raise ValueError('%s is not supported' % mode)

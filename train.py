@@ -45,7 +45,7 @@ def train(sess, args, config):
     log_dir = os.path.join(base_dir, config.get('config', 'logdir'))
     to_save_dir = config.get('config', 'savedir')
     adversarial_mode = config.get('config', 'mode')
-    whether_noise = config.getboolean('generator'. 'noise')
+    whether_noise = config.getboolean('generator', 'noise')
     noise_dim = config.getint('generator', 'noise_dim')
 
     adversarial_weight = config.getfloat(model_type, 'adversarial_weight')
@@ -145,6 +145,8 @@ def train(sess, args, config):
             # Update discriminator
             for disc_iter in range(discriminator_step):
                 d_loss, _, steps = sess.run([discriminator_loss, d_optim, global_step])
+                if adversarial_mode == 'FISHER':
+                    _, _ = sess.run([da_model.s2t_alpha, da_model.t2s_alpha])
                 #writer.add_summary(disc_sum, steps)
                 tf.logging.info('Step %d: Discriminator loss=%.5f', steps, d_loss)
 
