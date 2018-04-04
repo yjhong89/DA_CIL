@@ -25,10 +25,6 @@ def make_savedir(config):
     noise = config.getboolean('generator', 'noise')
     mask = config.getboolean('config', 'input_mask')
 
-    adversarial_weight = config.getint(model_type, 'adversarial_weight')
-    cyclic_weight = config.getint(model_type, 'cyclic_weight')
-    task_weight = config.getint(model_type, 'task_weight')
-
     result = model_type + '_' + adversarial_mode
 
     if noise:
