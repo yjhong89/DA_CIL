@@ -36,6 +36,11 @@ def make_savedir(config):
             result = result + '_noise_mask'
         else:
             result = result + '_noise_wo_mask'
+    else:
+        if mask:
+            result = result + '_wo_noise_mask'
+        else:
+            result = result + '_wo_noise_wo_mask'
 
     return result
 
