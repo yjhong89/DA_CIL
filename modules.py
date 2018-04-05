@@ -26,7 +26,7 @@ class generator(object):
         with tf.variable_scope(self.module_name):
             with tf.variable_scope(name + '_UNET'):
                 if reuse:
-                    tf.get_variable_scope().resue_variables()
+                    tf.get_variable_scope().reuse_variables()
                 
                 if self.latent_vars:
                     noise_channel = project_latent_vars(shape=x.get_shape().as_list()[0:3]+[1],
@@ -76,7 +76,7 @@ class generator(object):
                     d6 = tf.concat([d6, e2], axis=3)
                     layer_index += 1
                     d7 = op.transpose_conv2d(d6, out_channel=self.channel, name='transpose_conv2d_%d'%layer_index)
-                    d7 = tf.concat([d7, e2], axis=3)
+                    d7 = tf.concat([d7, e1], axis=3)
                     layer_index += 1
                     d8 = op.transpose_conv2d(d7, out_channel=3, name='transpose_conv2d_%d'%layer_index)
                 

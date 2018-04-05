@@ -24,8 +24,9 @@ def make_savedir(config):
    # augmentation = config.getboolean('config', 'augmentation')
     noise = config.getboolean('generator', 'noise')
     mask = config.getboolean('config', 'input_mask')
+    gen_type = config.get('generator', 'type')
 
-    result = model_type + '_' + adversarial_mode
+    result = model_type + '_' + adversarial_mode + '_' + gen_type
 
     if noise:
         if mask:

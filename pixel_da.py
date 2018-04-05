@@ -44,15 +44,15 @@ class model():
                 self.t2s2t = self.generator.generator_drn(self.g_t2s, reuse=True, name='G_S2T')
                 self.summary['back2target'] = self.t2s2t
             elif self.generator_type == 'UNET':
-                self.g_s2t = self.generator.generator_unet(fake_image, name='G_S2T')
+                self.g_s2t = self.generator.generator_unet(source, name='G_S2T')
                 self.summary['source_transferred'] = self.g_s2t
-                self.g_t2s = self.generator.generator_unet(real_image, name='G_T2S')    
+                self.g_t2s = self.generator.generator_unet(target, name='G_T2S')    
                 self.summary['target_transferred'] = self.g_t2s
 
-                self.s2t2s = self.generator.generator_unet(source, reuse=True, name='G_T2S')
+                self.s2t2s = self.generator.generator_unet(self.g_s2t, reuse=True, name='G_T2S')
                 self.summary['back2source'] = self.s2t2s
-                self.t2s2t = self.generator.generator_unet(target, reuse=True, name='G_S2T') 
-                self.summary['back2target'] = selef.t2s2t
+                self.t2s2t = self.generator.generator_unet(self.g_t2s, reuse=True, name='G_S2T') 
+                self.summary['back2target'] = self.t2s2t
             else:
                 raise Exception('Not supported type')
 
