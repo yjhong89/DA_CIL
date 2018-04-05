@@ -78,7 +78,7 @@ class generator(object):
                     d7 = op.transpose_conv2d(d6, out_channel=self.channel, name='transpose_conv2d_%d'%layer_index)
                     d7 = tf.concat([d7, e1], axis=3)
                     layer_index += 1
-                    d8 = op.transpose_conv2d(d7, out_channel=3, name='transpose_conv2d_%d'%layer_index)
+                    d8 = op.transpose_conv2d(d7, out_channel=3, name='transpose_conv2d_%d'%layer_index, normalization=False)
                 
         return tf.nn.tanh(d8) 
 
@@ -136,7 +136,7 @@ class generator(object):
                 # Upsampling 
                 x = op.transpose_conv2d(x, out_channel=self.channel, filter_size=3, name='transpose_conv2d_%d'%layer_index)
                 layer_index += 1
-                x = op.conv2d(x, out_channel=3, filter_size=7, stride=1, name='transpose_conv2d_%d'%layer_index)
+                x = op.conv2d(x, out_channel=3, filter_size=7, stride=1, name='transpose_conv2d_%d'%layer_index, normalization=False)
                 
 
         return tf.nn.tanh(x)
