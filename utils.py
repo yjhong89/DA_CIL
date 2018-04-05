@@ -133,13 +133,14 @@ def _summarize_transferred_grid(source_images, transferred_images=None, name='Im
     # name/Image
     return tf.summary.image('%s_image_grid' % name, grid, max_outputs=1)
 
-def config_summary(save_dir, adversarial_weight, s2t_cyclic_weight, t2s_cyclic_weight, task_weight, discriminator_step, generator_step, adversarial_mode, whether_noise, noise_dim):
+def config_summary(save_dir, s2t_adversarial_weight, t2s_adversarial_weight, s2t_cyclic_weight, t2s_cyclic_weight, task_weight, discriminator_step, generator_step, adversarial_mode, whether_noise, noise_dim):
     if not os.path.exists(save_dir):
         os.mkdir(save_dir)
 
     with open(os.path.join(save_dir, 'params.txt'), 'w') as f:
         f.write(str(adversarial_mode) + '\n')
-        f.write('\nAdversarial weight : ' + str(adversarial_weight))
+        f.write('\ns2t_adversarial weight : ' + str(s2t_adversarial_weight))
+        f.write('\nt2s_adversarial weight : ' + str(t2s_adversarial_weight))
         f.write('\ns2t_cyclic weight : ' + str(s2t_cyclic_weight))
         f.write('\nt2s_cyclic_weight : ' + str(t2s_cyclic_weight))
         f.write('\nTask weight : ' + str(task_weight))

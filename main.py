@@ -21,10 +21,10 @@ def main():
     parser.add_argument('--training', type=utils.str2bool, default='t')
     parser.add_argument('--max_iter', type=int, default=200000)
     parser.add_argument('--t2s_task', type=utils.str2bool, default='t')
-    parser.add_argument('--learning_rate', type=float, default=0.0005)
+    parser.add_argument('--learning_rate', type=float, default=0.005)
     parser.add_argument('--lr_decay', type=utils.str2bool, default='y')
     parser.add_argument('--save_interval', type=int, default=1000)
-    parser.add_argument('--summary_interval', type=int, default=100)
+    parser.add_argument('--summary_interval', type=int, default=50)
     parser.add_argument('--load_ckpt', type=utils.str2bool, default='f')
 
     args = parser.parse_args()

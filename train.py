@@ -47,7 +47,8 @@ def train(sess, args, config):
     whether_noise = config.getboolean('generator', 'noise')
     noise_dim = config.getint('generator', 'noise_dim')
 
-    adversarial_weight = config.getfloat(model_type, 'adversarial_weight')
+    s2t_adversarial_weight = config.getfloat(model_type, 's2t_adversarial_weight')
+    t2s_adversarial_weight = config.getfloat(model_type, 't2s_adversarial_weight')
     s2t_cyclic_weight = config.getfloat(model_type, 's2t_cyclic_weight')
     t2s_cyclic_weight = config.getfloat(model_type, 't2s_cyclic_weight')
     task_weight = config.getfloat(model_type, 't2s_task_weight')
@@ -91,8 +92,8 @@ def train(sess, args, config):
             source_image_batch = source_image_batch[:,:,:,:3]
             if config.getboolean('config', 'input_mask'):
                 mask_images = tf.to_float(tf.greater(mask_image_batch, 0.99))
-                source_image_batch = tf.multiply(source_image_batch, tf.tile(tf.expand_dims(mask_images, 3), [1,1,1,3]))
-            
+                source_image_batch = tf.multiply(source_image_batch, tf.tile(tf.expand_dims(mask_images, 3), [1,1,1,3])) 
+                
             # Label is already an 1-hot labels, but we expect categorical
             source_label_max_batch = tf.argmax(source_label_batch, 1)
             source_lateral_label_batch = (source_label_max_batch % 9) / 3
@@ -105,10 +106,10 @@ def train(sess, args, config):
         with tf.name_scope(model_type + '_objectives'):
             da_model.create_objective(source_head_label_batch, source_lateral_label_batch, adversarial_mode)
 
-            generator_loss = s2t_cyclic_weight * da_model.s2t_cyclic_loss + t2s_cyclic_weight * da_model.t2s_cyclic_loss + adversarial_weight * (da_model.s2t_g_loss + da_model.t2s_g_loss)
+            generator_loss = s2t_cyclic_weight * da_model.s2t_cyclic_loss + t2s_cyclic_weight * da_model.t2s_cyclic_loss + s2t_adversarial_weight * da_model.s2t_g_loss + t2s_adversarial_weight * da_model.t2s_g_loss
             da_model.summary['generator_loss'] = generator_loss
 
-            discriminator_loss = (adversarial_weight * (da_model.s2t_d_loss + da_model.t2s_d_loss) + task_weight * (da_model.transferred_task_loss + da_model.t2s_task_loss)) / 2
+            discriminator_loss = s2t_adversarial_weight * da_model.s2t_d_loss + t2s_adversarial_weight * da_model.t2s_d_loss + task_weight * (da_model.transferred_task_loss + da_model.t2s_task_loss)
             da_model.summary['discriminator_loss'] = discriminator_loss
 
     else:
@@ -128,14 +129,13 @@ def train(sess, args, config):
         d_optim = _gradient_clip(name='discriminator', optimizer=optimizer, loss=discriminator_loss, global_steps=global_step, clip_norm=args.clip_norm)
        
     generator_summary, discriminator_summary = utils.summarize(da_model.summary, args.t2s_task) 
-    utils.config_summary(save_dir, adversarial_weight, s2t_cyclic_weight, t2s_cyclic_weight, task_weight, discriminator_step, generator_step, adversarial_mode, whether_noise, noise_dim)
+    utils.config_summary(save_dir, s2t_adversarial_weight, t2s_adversarial_weight, s2t_cyclic_weight, t2s_cyclic_weight, task_weight, discriminator_step, generator_step, adversarial_mode, whether_noise, noise_dim)
     sess.run(tf.group(tf.global_variables_initializer(), tf.local_variables_initializer()))
 
     if args.load_ckpt:
         ckpt = tf.train.get_checkpoint_state(save_dir)
         if ckpt and ckpt.model_checkpoint_path:
-            ckpt_name = os.path.basename(ckpt.model_checkpoint_path)
-            saver.restore(sess, ckpt_name)
+            saver.restore(sess, ckpt.model_checkpoint_path)
 
     coord = tf.train.Coordinator()
     threads = tf.train.start_queue_runners(sess, coord)
@@ -156,13 +156,13 @@ def train(sess, args, config):
                 tf.logging.info('Step %d: Generator loss=%.5f', steps, g_loss)
             
             if (iter_count+1) % args.save_interval == 0:
-                saver.save(sess, os.path.join(save_dir, model_type), global_step=iter_count)
+                saver.save(sess, os.path.join(save_dir, model_type), global_step=(iter_count+1))
                 tf.logging.info('Checkpoint save')
 
             if (iter_count+1) % args.summary_interval == 0:
                 disc_sum, gen_sum = sess.run([discriminator_summary, generator_summary])
-                writer.add_summary(disc_sum, iter_count+1)
-                writer.add_summary(gen_sum, iter_count+1)
+                writer.add_summary(disc_sum, steps)
+                writer.add_summary(gen_sum, steps)
                 tf.logging.info('Summary at %d step' % (iter_count+1))
 
         
