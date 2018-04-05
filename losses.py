@@ -115,14 +115,14 @@ def task_regression_loss(steer, acceleration, command, logits, acc_weight):
 
     return regression_loss
 
-def task_classifier_loss(head_labels, lateral_labels, head_logits, lateral_logits, weight, num_classes=3):
+def task_classifier_loss(head_labels, lateral_labels, head_logits, lateral_logits, num_classes=3):
     total_loss = 0
     lateral_one_hot_labels = slim.one_hot_encoding(tf.cast(lateral_labels, tf.int64), num_classes)
     head_one_hot_labels = slim.one_hot_encoding(tf.cast(head_labels, tf.int64), num_classes)
     
-    loss = tf.losses.softmax_cross_entropy(onehot_labels=lateral_one_hot_labels, logits=lateral_logits, weights=weight)
+    loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(labels=lateral_one_hot_labels, logits=lateral_logits))
     total_loss += loss
-    loss = tf.losses.softmax_cross_entropy(onehot_labels=head_one_hot_labels, logits=head_logits, weights=weight)
+    loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(labels=head_one_hot_labels, logits=head_logits))
     total_loss += loss
 
     return total_loss

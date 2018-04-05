@@ -28,6 +28,12 @@ class generator(object):
                 if reuse:
                     tf.get_variable_scope().resue_variables()
                 
+                if self.latent_vars:
+                    noise_channel = project_latent_vars(shape=x.get_shape().as_list()[0:3]+[1],
+                                        latent_vars=self.latent_vars,
+                                        combine_method='concat', name=name)
+                    x = tf.concat([x, noise_channel], axis=3)
+
                 # All relus in the encoder are leaky with 0.2
                 with tf.variable_scope('encoder'):
                     e1 = op.conv2d(x, out_channel=self.channel, name='conv2d_%d'%layer_index)
@@ -316,8 +322,8 @@ class task_classifier(object):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     args = parser.parse_args()
-    d = discriminator(64)
-    x = tf.get_variable('test', [10, 90, 160,3])
-    d(x, name='d')
-    #g.generator_drn(x, name='g')
+    g = generator(64)
+    x = tf.get_variable('test', [10, 256, 256,3])
+    #d(x, name='d')
+    g.generator_unet(x, name='g')
             

@@ -94,10 +94,10 @@ class model():
             self.summary['t2s_d_loss'] = self.t2s_d_loss            
 
         with tf.name_scope('task'):
-            self.transferred_task_loss = losses.task_classifier_loss(head_labels, lateral_labels, self.head_logits, self.lateral_logits, weight=self.transferred_task_weight)
+            self.transferred_task_loss = losses.task_classifier_loss(head_labels, lateral_labels, self.head_logits, self.lateral_logits)
             self.summary['task_loss'] = self.transferred_task_loss
             if self.args.t2s_task:
-                self.t2s_task_loss = losses.task_classifier_loss(head_labels, lateral_labels, self.t2s_head_logits, self.t2s_lateral_logits, weight=self.t2s_task_weight)
+                self.t2s_task_loss = losses.task_classifier_loss(head_labels, lateral_labels, self.t2s_head_logits, self.t2s_lateral_logits)
                 self.summary['t2s_task_loss'] = self.t2s_task_loss
        
 

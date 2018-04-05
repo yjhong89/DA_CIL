@@ -51,7 +51,8 @@ def train(sess, args, config):
     t2s_adversarial_weight = config.getfloat(model_type, 't2s_adversarial_weight')
     s2t_cyclic_weight = config.getfloat(model_type, 's2t_cyclic_weight')
     t2s_cyclic_weight = config.getfloat(model_type, 't2s_cyclic_weight')
-    task_weight = config.getfloat(model_type, 't2s_task_weight')
+    s2t_task_weight = config.getfloat(model_type, 'task_weight')
+    t2s_task_weight = config.getfloat(model_type, 't2s_task_weight')
     discriminator_step = config.getint(model_type, 'discriminator_step')
     generator_step = config.getint(model_type, 'generator_step')
     save_dir = os.path.join(log_dir, utils.make_savedir(config))
@@ -109,7 +110,7 @@ def train(sess, args, config):
             generator_loss = s2t_cyclic_weight * da_model.s2t_cyclic_loss + t2s_cyclic_weight * da_model.t2s_cyclic_loss + s2t_adversarial_weight * da_model.s2t_g_loss + t2s_adversarial_weight * da_model.t2s_g_loss
             da_model.summary['generator_loss'] = generator_loss
 
-            discriminator_loss = s2t_adversarial_weight * da_model.s2t_d_loss + t2s_adversarial_weight * da_model.t2s_d_loss + task_weight * (da_model.transferred_task_loss + da_model.t2s_task_loss)
+            discriminator_loss = s2t_adversarial_weight * da_model.s2t_d_loss + t2s_adversarial_weight * da_model.t2s_d_loss + s2t_task_weight * da_model.transferred_task_loss + t2s_task_weight * da_model.t2s_task_loss
             da_model.summary['discriminator_loss'] = discriminator_loss
 
     else:
@@ -129,7 +130,7 @@ def train(sess, args, config):
         d_optim = _gradient_clip(name='discriminator', optimizer=optimizer, loss=discriminator_loss, global_steps=global_step, clip_norm=args.clip_norm)
        
     generator_summary, discriminator_summary = utils.summarize(da_model.summary, args.t2s_task) 
-    utils.config_summary(save_dir, s2t_adversarial_weight, t2s_adversarial_weight, s2t_cyclic_weight, t2s_cyclic_weight, task_weight, discriminator_step, generator_step, adversarial_mode, whether_noise, noise_dim)
+    utils.config_summary(save_dir, s2t_adversarial_weight, t2s_adversarial_weight, s2t_cyclic_weight, t2s_cyclic_weight, s2t_task_weight, t2s_task_weight, discriminator_step, generator_step, adversarial_mode, whether_noise, noise_dim)
     sess.run(tf.group(tf.global_variables_initializer(), tf.local_variables_initializer()))
 
     if args.load_ckpt:
