@@ -193,7 +193,7 @@ class discriminator(object):
                 x = op.conv2d(x, out_channel=self.channel*8, stride=1, name='conv2d_%d'%layer_index)
                 layer_index += 1
                 # After the last layer, a convolution is applied to map to a 1 dimensional output
-                x = op.conv2d(x, out_channel=1, stride=1, name='conv2d_%d'%layer_index, activation=None)
+                x = op.conv2d(x, out_channel=1, stride=1, name='conv2d_%d'%layer_index, activation=None, normalization=False)
 
         return x
 
