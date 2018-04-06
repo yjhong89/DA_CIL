@@ -45,7 +45,7 @@ def residual(x, filter_size, stride, channel, layer_index, name='residual'):
         index = layer_index + 1
         x = conv2d(x, out_channel=channel, filter_size=filter_size, stride=stride, name='conv2d_%d'%index)
         index += 1
-        return x + residual, index
+    return x + residual, index
 
 def fc(x, hidden, dropout_ratio=0.5, activation=tf.nn.relu, dropout=True, name='fc'):
     _, in_dim = x.get_shape().as_list()
@@ -66,7 +66,7 @@ def global_average_pooling(x, name='global_pooling'):
     # Make fully connected layer
     return tf.reduce_mean(x, [1,2])
     
-def dilated_conv2d(x, out_channel, filter_size, dilation_rate, name='dilated_conv2d', activation=_leaky_relu, normalization=_instance_norm, padding='VALID', training=True):
+def dilated_conv2d(x, out_channel, filter_size, dilation_rate, name='dilated_conv2d', activation=tf.nn.relu, normalization=_instance_norm, padding='VALID', training=True):
     _, _, _, in_channel = x.get_shape().as_list()
     with tf.variable_scope(name):
         weight = tf.get_variable('weight', shape=[filter_size, filter_size, in_channel, out_channel], initializer=tf.contrib.layers.xavier_initializer())
@@ -162,7 +162,9 @@ def residual_block(x, out_dim, layer_index, dilation_rate=1, filter_size=3, down
         r2 = dilated_conv2d(r1, out_channel=out_dim, filter_size=filter_size, activation=None, padding='VALID', dilation_rate=dilation_rate, name='conv2d_%d'%index, normalization=normalization, training=training)
         #print('layer: %d, shape of x: %s, shape of r: %s' % (layer_index, x.get_shape().as_list(), r2.get_shape().as_list()))
         index += 1
-        return tf.nn.relu(r2+x), index
+
+        # Do not use non-linear activation
+        return r2+x, index
 
 
 
