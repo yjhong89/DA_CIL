@@ -14,7 +14,7 @@ def _instance_norm(x, training=True, name='instance_norm', epsilon=1e-5):
         
         normalized = (x - instance_mean) / tf.sqrt(instance_var + epsilon)
         
-    return scale * normalized + shift
+        return scale * normalized + shift
 
 def _batch_norm(x, training=True, name='batch_norm', decay=0.99, epsilon=1e-5):
     _, _, _, channel = x.get_shape().as_list()

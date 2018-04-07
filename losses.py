@@ -67,9 +67,9 @@ def adversarial_loss(real_sample, fake_sample, real_logits, fake_logits, discrim
 #        g_loss = tf.reduce_mean(tf.reduce_sum(tf.square(fake_logits - 1), axis=[1,2,3]))
 #        d_loss = tf.reduce_mean(tf.reduce_sum(tf.square(real_logits - 1), axis=[1,2,3])) \
 #                    + tf.reduce_mean(tf.reduce_sum(tf.square(fake_logits), axis=[1,2,3]))
-        g_loss = tf.reduce_mean((tf.square(fake_logits - 1)))
-        d_loss = tf.reduce_mean(tf.square(real_logits - 1)) \
-                    + tf.reduce_mean(tf.square(fake_logits))
+        g_loss = tf.reduce_mean((tf.square(tf.nn.sigmoid(fake_logits) - 1)))
+        d_loss = tf.reduce_mean(tf.square(tf.nn.sigmoid(real_logits) - 1)) \
+                    + tf.reduce_mean(tf.square(tf.nn.sigmoid(fake_logits)))
     elif mode == 'FISHER':
         with tf.variable_scope(discriminator_name):
             alpha = tf.get_variable('fisher_lambda', [], initializer=tf.constant_initializer(0))
@@ -81,7 +81,7 @@ def adversarial_loss(real_sample, fake_sample, real_logits, fake_logits, discrim
 
         constraint = 1 - 0.5 * (e_p_f2 + e_q_f2)
 
-        g_loss = -tf.reduce_mean(e_q_f)
+        g_loss = -tf.reduce_mean(fake_logits)
         d_loss = -1 * (e_p_f - e_q_f + alpha*constraint - rho/2 * constraint**2)
 
         alpha_opt = tf.train.GradientDescentOptimizer(rho).minimize(-d_loss, var_list=[alpha])

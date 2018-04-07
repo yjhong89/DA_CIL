@@ -304,7 +304,7 @@ def get_batches(dataset_name, split_name, tfrecord_dir, batch_size, config=None)
                 capacity=batch_size*10, num_threads=10, min_after_dequeue=batch_size*2)
 
         # If increase image size, results in OOM
-        image_batch = tf.image.resize_images(image_batch, [90, 160])
+        image_batch = tf.image.resize_images(image_batch, [256, 256])
         
         # [batch, 1] -> [batch size, 1, 9]
         label_batch = slim.one_hot_encoding(label_batch, 9)

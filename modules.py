@@ -34,51 +34,50 @@ class generator(object):
                                         combine_method='concat', name=name)
                     x = tf.concat([x, noise_channel], axis=3)
 
-                # All relus in the encoder are leaky with 0.2
                 with tf.variable_scope('encoder'):
-                    e1 = op.conv2d(x, out_channel=self.channel, name='conv2d_%d'%layer_index)
+                    e1 = op.conv2d(x, out_channel=self.channel, name='conv2d_%d'%layer_index, activation=False)
                     layer_index += 1
-                    e2 = op.conv2d(e1, out_channel=self.channel*2, name='conv2d_%d'%layer_index)   
+                    e2 = op.conv2d(op._leaky_relu(e1), out_channel=self.channel*2, name='conv2d_%d'%layer_index, activation=False)   
                     layer_index += 1
-                    e3 = op.conv2d(e2, out_channel=self.channel*4, name='conv2d_%d'%layer_index)
+                    e3 = op.conv2d(op._leaky_relu(e2), out_channel=self.channel*4, name='conv2d_%d'%layer_index, activation=False)
                     layer_index += 1
-                    e4 = op.conv2d(e3, out_channel=self.channel*8, name='conv2d_%d'%layer_index)
+                    e4 = op.conv2d(op._leaky_relu(e3), out_channel=self.channel*8, name='conv2d_%d'%layer_index, activation=False)
                     layer_index += 1
-                    e5 = op.conv2d(e4, out_channel=self.channel*8, name='conv2d_%d'%layer_index)
+                    e5 = op.conv2d(op._leaky_relu(e4), out_channel=self.channel*8, name='conv2d_%d'%layer_index, activation=False)
                     layer_index += 1
-                    e6 = op.conv2d(e5, out_channel=self.channel*8, name='conv2d_%d'%layer_index)
+                    e6 = op.conv2d(op._leaky_relu(e5), out_channel=self.channel*8, name='conv2d_%d'%layer_index, activation=False)
                     layer_index += 1
-                    e7 = op.conv2d(e6, out_channel=self.channel*8, name='conv2d_%d'%layer_index)
+                    e7 = op.conv2d(op._leaky_relu(e6), out_channel=self.channel*8, name='conv2d_%d'%layer_index, activation=False)
                     layer_index += 1
                     # Middle point of total architecture(number of total layers=16)
-                    e8 = op.conv2d(e7, out_channel=self.channel*8, name='conv2d_%d'%layer_index)
+                    e8 = op.conv2d(op._leaky_relu(e7), out_channel=self.channel*8, name='conv2d_%d'%layer_index, activation=False)
                     layer_index += 1
                 
                 # U-Net architecture is with skip connections between each layer i in the encoer and layer n-i in the decoder. Concatenate activations in channel axis
                 # Dropout with 0.5
                 with tf.variable_scope('decoder'):
-                    d1 = op.transpose_conv2d(e8, out_channel=self.channel*8, name='transpose_conv2d_%d'%layer_index)
+                    d1 = op.transpose_conv2d(tf.nn.relu(e8), out_channel=self.channel*8, name='transpose_conv2d_%d'%layer_index, activation=False)
                     d1 = tf.concat([d1, e7], axis=3)
                     layer_index += 1
-                    d2 = op.transpose_conv2d(d1, out_channel=self.channel*8, name='transpose_conv2d_%d'%layer_index)
+                    d2 = op.transpose_conv2d(tf.nn.relu(d1), out_channel=self.channel*8, name='transpose_conv2d_%d'%layer_index, activation=False)
                     d2 = tf.concat([d2, e6], axis=3)
                     layer_index += 1
-                    d3 = op.transpose_conv2d(d2, out_channel=self.channel*8, name='transpose_conv2d_%d'%layer_index)
+                    d3 = op.transpose_conv2d(tf.nn.relu(d2), out_channel=self.channel*8, name='transpose_conv2d_%d'%layer_index, activation=False)
                     d3 = tf.concat([d3, e5], axis=3)
                     layer_index += 1
-                    d4 = op.transpose_conv2d(d3, out_channel=self.channel*8, name='transpose_conv2d_%d'%layer_index)
+                    d4 = op.transpose_conv2d(tf.nn.relu(d3), out_channel=self.channel*8, name='transpose_conv2d_%d'%layer_index)
                     d4 = tf.concat([d4, e4], axis=3)
                     layer_index += 1
-                    d5 = op.transpose_conv2d(d4, out_channel=self.channel*4, name='transpose_conv2d_%d'%layer_index)
+                    d5 = op.transpose_conv2d(tf.nn.relu(d4), out_channel=self.channel*4, name='transpose_conv2d_%d'%layer_index)
                     d5 = tf.concat([d5, e3], axis=3)
                     layer_index += 1
-                    d6 = op.transpose_conv2d(d5, out_channel=self.channel*2, name='transpose_conv2d_%d'%layer_index)
+                    d6 = op.transpose_conv2d(tf.nn.relu(d5), out_channel=self.channel*2, name='transpose_conv2d_%d'%layer_index)
                     d6 = tf.concat([d6, e2], axis=3)
                     layer_index += 1
-                    d7 = op.transpose_conv2d(d6, out_channel=self.channel, name='transpose_conv2d_%d'%layer_index)
+                    d7 = op.transpose_conv2d(tf.nn.relu(d6), out_channel=self.channel, name='transpose_conv2d_%d'%layer_index)
                     d7 = tf.concat([d7, e1], axis=3)
                     layer_index += 1
-                    d8 = op.transpose_conv2d(d7, out_channel=3, name='transpose_conv2d_%d'%layer_index, normalization=False, activation=tf.nn.tanh)
+                    d8 = op.transpose_conv2d(tf.nn.relu(d7), out_channel=3, name='transpose_conv2d_%d'%layer_index, normalization=False, activation=tf.nn.tanh)
                 
         return d8 
 
