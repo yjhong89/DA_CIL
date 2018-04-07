@@ -65,16 +65,16 @@ class generator(object):
                     d3 = op.transpose_conv2d(tf.nn.relu(d2), out_channel=self.channel*8, name='transpose_conv2d_%d'%layer_index, activation=False)
                     d3 = tf.concat([d3, e5], axis=3)
                     layer_index += 1
-                    d4 = op.transpose_conv2d(tf.nn.relu(d3), out_channel=self.channel*8, name='transpose_conv2d_%d'%layer_index)
+                    d4 = op.transpose_conv2d(tf.nn.relu(d3), out_channel=self.channel*8, name='transpose_conv2d_%d'%layer_index, activation=False)
                     d4 = tf.concat([d4, e4], axis=3)
                     layer_index += 1
-                    d5 = op.transpose_conv2d(tf.nn.relu(d4), out_channel=self.channel*4, name='transpose_conv2d_%d'%layer_index)
+                    d5 = op.transpose_conv2d(tf.nn.relu(d4), out_channel=self.channel*4, name='transpose_conv2d_%d'%layer_index, activation=False)
                     d5 = tf.concat([d5, e3], axis=3)
                     layer_index += 1
-                    d6 = op.transpose_conv2d(tf.nn.relu(d5), out_channel=self.channel*2, name='transpose_conv2d_%d'%layer_index)
+                    d6 = op.transpose_conv2d(tf.nn.relu(d5), out_channel=self.channel*2, name='transpose_conv2d_%d'%layer_index, activation=False)
                     d6 = tf.concat([d6, e2], axis=3)
                     layer_index += 1
-                    d7 = op.transpose_conv2d(tf.nn.relu(d6), out_channel=self.channel, name='transpose_conv2d_%d'%layer_index)
+                    d7 = op.transpose_conv2d(tf.nn.relu(d6), out_channel=self.channel, name='transpose_conv2d_%d'%layer_index, activation=False)
                     d7 = tf.concat([d7, e1], axis=3)
                     layer_index += 1
                     d8 = op.transpose_conv2d(tf.nn.relu(d7), out_channel=3, name='transpose_conv2d_%d'%layer_index, normalization=False, activation=tf.nn.tanh)
@@ -98,22 +98,22 @@ class generator(object):
                     x = tf.concat([x, noise_channel], axis=3)
 
                 # image_size - fiter_size + 2*pad + 1 (when stride=1)
-                x = tf.pad(x, [[0,0],[3,3],[3,3],[0,0]], 'SYMMETRIC')
+                x = tf.pad(x, [[0,0],[3,3],[3,3],[0,0]], 'REFLECT')
                 x = op.conv2d(x, out_channel=self.channel, filter_size=7, stride=1, activation=tf.nn.relu, padding='VALID', name='conv2d_%d'%layer_index)
                 layer_index += 1
-                x, layer_index = op.residual_block(x, out_dim=self.channel, layer_index=layer_index, downsample=False, name='residual_%d'%residual_index)
+                x, layer_index = op.dilated_residual_block(x, out_dim=self.channel, layer_index=layer_index, downsample=False, name='residual_%d'%residual_index)
                 layer_index += 1
 
                 # Down sample
-                x, layer_index = op.residual_block(x, out_dim=self.channel*2, layer_index=layer_index, downsample=True, name='residual_%d'%residual_index)
+                x, layer_index = op.dilated_residual_block(x, out_dim=self.channel*2, layer_index=layer_index, downsample=True, name='residual_%d'%residual_index)
                 residual_index += 1
-                x, layer_index = op.residual_block(x, out_dim=self.channel*2, layer_index=layer_index, downsample=False, name='residual_%d'%residual_index)
+                x, layer_index = op.dilated_residual_block(x, out_dim=self.channel*2, layer_index=layer_index, downsample=False, name='residual_%d'%residual_index)
                 residual_index += 1
 
                 # Dilation instead of down sample
-                x, layer_index = op.residual_block(x, out_dim=self.channel*4, dilation_rate=2, layer_index=layer_index, downsample=False, name='residual_%d'%residual_index)
+                x, layer_index = op.dilated_residual_block(x, out_dim=self.channel*4, dilation_rate=2, layer_index=layer_index, downsample=False, name='residual_%d'%residual_index)
                 residual_index += 1
-                x, layer_index = op.residual_block(x, out_dim=self.channel*4, dilation_rate=2, layer_index=layer_index, downsample=False, name='residual_%d'%residual_index)
+                x, layer_index = op.dilated_residual_block(x, out_dim=self.channel*4, dilation_rate=2, layer_index=layer_index, downsample=False, name='residual_%d'%residual_index)
                 residual_index += 1
                  
 #                x, layer_index = op.residual_block(x, out_dim=self.channel*8, dilation_rate=4, layer_index=layer_index, downsample=False, name='residual_%d'%residual_index)
@@ -135,11 +135,74 @@ class generator(object):
                 # Upsampling 
                 x = op.transpose_conv2d(x, out_channel=self.channel, filter_size=3, name='transpose_conv2d_%d'%layer_index)
                 layer_index += 1
-                x = op.conv2d(x, out_channel=3, filter_size=7, stride=1, name='transpose_conv2d_%d'%layer_index, normalization=None, activation=tf.nn.tanh)
+                x = tf.pad(x, [[0,0],[3,3],[3,3],[0,0]], 'REFLECT')
+                x = op.conv2d(x, out_channel=3, filter_size=7, stride=1, padding='VALID', name='transpose_conv2d_%d'%layer_index, normalization=None, activation=tf.nn.tanh)
                 
 
         return x
 
+    # Justin Johnson`s model with 9 blocks
+    def generator_resnet(self, x, name, reuse=False):
+        layer_index = 0
+        residual_index = 0
+        with tf.variable_scope(self.module_name):
+            with tf.variable_scope(name+'_RESNET'):
+                if reuse:
+                    tf.get_variable_scope().reuse_variables()
+
+                if self.latent_vars:
+                    noise_channel = project_latent_vars(shape=x.get_shape().as_list()[0:3]+[1],
+                                        latent_vars=self.latent_vars,
+                                        combine_method='concat', name=name)
+                    x = tf.concat([x, noise_channel], axis=3)
+
+                # image_size - fiter_size + 2*pad + 1 (when stride=1)
+                x = tf.pad(x, [[0,0],[3,3],[3,3],[0,0]], 'REFLECT')
+                x = op.conv2d(x, out_channel=self.channel, filter_size=7, stride=1, activation=tf.nn.relu, padding='VALID', name='conv2d_%d'%layer_index)
+                layer_index += 1
+                x = op.conv2d(x, out_channel=self.channel*2, filter_size=3, stride=2, activation=tf.nn.relu, name='conv2d_%d'%layer_index)
+                layer_index += 1
+                x = op.conv2d(x, out_channel=self.channel*4, filter_size=3, stride=2, activation=tf.nn.relu, name='conv2d_%d'%layer_index)
+                layer_index += 1
+
+                x, layer_index = op.residual_block(x, out_dim=self.channel*4, layer_index=layer_index, name='residual_%d'%residual_index)
+                layer_index += 1
+                x, layer_index = op.residual_block(x, out_dim=self.channel*4, layer_index=layer_index, name='residual_%d'%residual_index)
+                residual_index += 1
+                x, layer_index = op.residual_block(x, out_dim=self.channel*4, layer_index=layer_index, name='residual_%d'%residual_index)
+                residual_index += 1
+                x, layer_index = op.residual_block(x, out_dim=self.channel*4, layer_index=layer_index, name='residual_%d'%residual_index)
+                residual_index += 1
+                x, layer_index = op.residual_block(x, out_dim=self.channel*4, layer_index=layer_index, name='residual_%d'%residual_index)
+                residual_index += 1
+                x, layer_index = op.residual_block(x, out_dim=self.channel*4, layer_index=layer_index, name='residual_%d'%residual_index)
+                residual_index += 1
+                x, layer_index = op.residual_block(x, out_dim=self.channel*4, layer_index=layer_index, name='residual_%d'%residual_index)
+                residual_index += 1
+                x, layer_index = op.residual_block(x, out_dim=self.channel*4, layer_index=layer_index, name='residual_%d'%residual_index)
+                residual_index += 1
+                x, layer_index = op.residual_block(x, out_dim=self.channel*4, layer_index=layer_index, name='residual_%d'%residual_index)
+                residual_index += 1
+
+                # Upsampling 
+                x = op.transpose_conv2d(x, out_channel=self.channel*2, filter_size=3, stride=2, name='transpose_conv2d_%d'%layer_index)
+                layer_index += 1
+                x = op.transpose_conv2d(x, out_channel=self.channel, filter_size=3, stride=2, name='transpose_conv2d_%d'%layer_index)
+                layer_index += 1
+                x = tf.pad(x, [[0,0],[3,3],[3,3],[0,0]], 'REFLECT')
+                x = op.conv2d(x, out_channel=3, filter_size=7, stride=1, padding='VALID', name='transpose_conv2d_%d'%layer_index, normalization=None, activation=tf.nn.tanh)
+                
+        return x
+
+
+def project_latent_vars(shape, latent_vars, combine_method, name):
+    values = list()
+    # Keys
+    for var in latent_vars:
+        with tf.variable_scope(var):
+            # Project and reshape noise to NHWC
+            projected = op.fc(latent_vars[var], np.prod(shape[1:]), dropout=False, name=name+var)
+        values.append(tf.reshape(projected, [shape[0]] + shape[1:]))
 
 def project_latent_vars(shape, latent_vars, combine_method, name):
     values = list()
@@ -287,19 +350,19 @@ class task_classifier(object):
                 x = tf.pad(image, [[0,0],[3,3],[3,3],[0,0]], 'SYMMETRIC')
                 x = op.conv2d(x, out_channel=self.channel, filter_size=7, stride=1, activation=tf.nn.relu, padding='VALID', normalization=op._batch_norm, name='conv2d_%d'%layer_index, training=self.training)
                 layer_index += 1
-                x, layer_index = op.residual_block(x, out_dim=self.channel, layer_index=layer_index, downsample=False, normalization=op._batch_norm, name='residual_%d'%residual_index, training=self.training)
+                x, layer_index = op.dilated_residual_block(x, out_dim=self.channel, layer_index=layer_index, downsample=False, normalization=op._batch_norm, name='residual_%d'%residual_index, training=self.training)
                 residual_index += 1
     
             # Last layers in the classifier
             with tf.variable_scope(shared, reuse=reuse_shared):
-                x, layer_index = op.residual_block(x, out_dim=self.channel*2, layer_index=layer_index, downsample=True, normalization=op._batch_norm, name='residual_%d'%residual_index, training=self.training)
+                x, layer_index = op.dilated_residual_block(x, out_dim=self.channel*2, layer_index=layer_index, downsample=True, normalization=op._batch_norm, name='residual_%d'%residual_index, training=self.training)
                 residual_index += 1
-                x, layer_index = op.residual_block(x, out_dim=self.channel*2, layer_index=layer_index, downsample=False, normalization=op._batch_norm, name='residual_%d'%residual_index, training=self.training)
+                x, layer_index = op.dilated_residual_block(x, out_dim=self.channel*2, layer_index=layer_index, downsample=False, normalization=op._batch_norm, name='residual_%d'%residual_index, training=self.training)
                 residual_index += 1
 
-                x, layer_index = op.residual_block(x, out_dim=self.channel*4, dilation_rate=2, layer_index=layer_index, downsample=False, normalization=op._batch_norm, name='residual_%d'%residual_index, training=self.training)
+                x, layer_index = op.dilated_residual_block(x, out_dim=self.channel*4, dilation_rate=2, layer_index=layer_index, downsample=False, normalization=op._batch_norm, name='residual_%d'%residual_index, training=self.training)
                 residual_index += 1
-                x, layer_index = op.residual_block(x, out_dim=self.channel*4, dilation_rate=2, layer_index=layer_index, downsample=False, normalization=op._batch_norm, name='residual_%d'%residual_index, training=self.training)
+                x, layer_index = op.dilated_residual_block(x, out_dim=self.channel*4, dilation_rate=2, layer_index=layer_index, downsample=False, normalization=op._batch_norm, name='residual_%d'%residual_index, training=self.training)
                 residual_index += 1
 
                 # Removing gridding artifacts

@@ -125,9 +125,10 @@ def train(sess, args, config):
         else:
             learning_rate = args.learning_rate
 
-        optimizer = _get_optimizer(config, args.optimizer)(learning_rate)
-        g_optim = _gradient_clip(name='generator', optimizer=optimizer, loss=generator_loss, global_steps=global_step, clip_norm=args.clip_norm)
-        d_optim = _gradient_clip(name='discriminator', optimizer=optimizer, loss=discriminator_loss, global_steps=global_step, clip_norm=args.clip_norm)
+        g_optimizer = _get_optimizer(config, args.optimizer)(learning_rate)
+        d_optimizer = _get_optimizer(config, args.optimizer)(learning_rate)
+        g_optim = _gradient_clip(name='generator', optimizer=g_optimizer, loss=generator_loss, global_steps=global_step, clip_norm=args.clip_norm)
+        d_optim = _gradient_clip(name='discriminator', optimizer=d_optimizer, loss=discriminator_loss, global_steps=global_step, clip_norm=args.clip_norm)
        
     generator_summary, discriminator_summary = utils.summarize(da_model.summary, args.t2s_task) 
     utils.config_summary(save_dir, s2t_adversarial_weight, t2s_adversarial_weight, s2t_cyclic_weight, t2s_cyclic_weight, s2t_task_weight, t2s_task_weight, discriminator_step, generator_step, adversarial_mode, whether_noise, noise_dim)

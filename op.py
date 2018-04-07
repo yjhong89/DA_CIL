@@ -38,14 +38,16 @@ def _batch_norm(x, training=True, name='batch_norm', decay=0.99, epsilon=1e-5):
 def _leaky_relu(x, slope=0.2):
     return tf.maximum(x, 0.2*x)
 
-def residual(x, filter_size, stride, channel, layer_index, name='residual'):
+def residual_block(x, out_dim, layer_index, filter_size=3, stride=1, name='residual'):
     with tf.name_scope(name):
-        residual = tf.identity(x)
-        x = conv2d(x, out_channel=channel, filter_size=filter_size, stride=stride, name='conv2d_%d'%layer_index)
+        padding = int((filter_size - 1) / 2)
+        y = tf.pad(x, [[0,0],[padding, padding], [padding,padding],[0,0]], 'REFLECT')
+        y = conv2d(y, out_channel=out_dim, filter_size=filter_size, stride=stride, name='conv2d_%d'%layer_index, activation=tf.nn.relu, padding='VALID')
         index = layer_index + 1
-        x = conv2d(x, out_channel=channel, filter_size=filter_size, stride=stride, name='conv2d_%d'%index)
+        y = tf.pad(y, [[0,0],[padding, padding], [padding,padding],[0,0]], 'REFLECT')
+        y = conv2d(y, out_channel=out_dim, filter_size=filter_size, stride=stride, name='conv2d_%d'%index, activation=False, padding='VALID')
         index += 1
-    return x + residual, index
+    return x + y, index
 
 def fc(x, hidden, dropout_ratio=0.5, activation=tf.nn.relu, dropout=True, name='fc'):
     _, in_dim = x.get_shape().as_list()
@@ -131,7 +133,7 @@ def _max_pool(x, kernel=[1,2,2,1], stride=[1,2,2,1]):
     return tf.nn.max_pool(x, ksize=kernel, strides=stride, padding='SAME')
         
 
-def residual_block(x, out_dim, layer_index, dilation_rate=1, filter_size=3, downsample=True, name='residual', normalization=_instance_norm, training=True):
+def dilated_residual_block(x, out_dim, layer_index, dilation_rate=1, filter_size=3, downsample=True, name='residual', normalization=_instance_norm, training=True):
     in_dim = x.get_shape().as_list()[-1]
     if in_dim * 2 == out_dim:
         increase_dim = True
@@ -141,13 +143,13 @@ def residual_block(x, out_dim, layer_index, dilation_rate=1, filter_size=3, down
     with tf.variable_scope(name):
         # int: floor
         pad = int((filter_size - 1) / 2 * dilation_rate)
-        r = tf.pad(x, [[0,0],[pad,pad],[pad,pad],[0,0]], 'SYMMETRIC')
+        r = tf.pad(x, [[0,0],[pad,pad],[pad,pad],[0,0]], 'REFLECT')
         # Note that when using dilated convolution, stride must be 1
         # When down sampling, [height, width, channel] -> [height/2, width/2, channel*2], so conv2 and x does not match
         # From Resnet, we add zero pads to increase the depth
         if downsample:
             x = _max_pool(x)
-            r = tf.pad(x, [[0,0],[pad,pad],[pad,pad],[0,0]], 'SYMMETRIC')
+            r = tf.pad(x, [[0,0],[pad,pad],[pad,pad],[0,0]], 'REFLECT')
             r1 = dilated_conv2d(r, out_channel=out_dim, filter_size=filter_size, activation=tf.nn.relu, padding='VALID', dilation_rate=dilation_rate, name='conv2d_%d'%layer_index, normalization=normalization, training=training)
             x = tf.pad(x, [[0,0],[0,0],[0,0],[in_dim//2,in_dim//2]], 'CONSTANT')
             #print(r1.get_shape().as_list())
@@ -158,7 +160,7 @@ def residual_block(x, out_dim, layer_index, dilation_rate=1, filter_size=3, down
             else:
                 r1 = dilated_conv2d(r, out_channel=out_dim, filter_size=filter_size, activation=tf.nn.relu, padding='VALID', dilation_rate=dilation_rate, name='conv2d_%d'%layer_index, normalization=normalization, training=training)
         index = layer_index + 1
-        r1 = tf.pad(r1, [[0,0],[pad,pad],[pad,pad],[0,0]], 'SYMMETRIC')
+        r1 = tf.pad(r1, [[0,0],[pad,pad],[pad,pad],[0,0]], 'REFLECT')
         r2 = dilated_conv2d(r1, out_channel=out_dim, filter_size=filter_size, activation=None, padding='VALID', dilation_rate=dilation_rate, name='conv2d_%d'%index, normalization=normalization, training=training)
         #print('layer: %d, shape of x: %s, shape of r: %s' % (layer_index, x.get_shape().as_list(), r2.get_shape().as_list()))
         index += 1
