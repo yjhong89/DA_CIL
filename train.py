@@ -13,7 +13,9 @@ def _get_optimizer(config, name):
     optimizer_dict = {
         'adam': lambda learning_rate: tf.train.AdamOptimizer(learning_rate, config.getfloat(section, name+'_beta1'), config.getfloat(section, name+'_beta2'), config.getfloat(section, name+'_epsilon')),
         'momentum': lambda learning_rate: tf.train.MomentumOptimizer(learning_rate, config.getfloat(section, 'momentum')),
-        'gd': lambda learning_rate: tf.train.GradientDescentOptimzer(learning_rate) }
+        'gd': lambda learning_rate: tf.train.GradientDescentOptimzer(learning_rate),
+        'rms': lambda learning_rate: tf.train.RMSPropOptimizer(learning_rate)         
+}
 
     return optimizer_dict[name]
 
@@ -24,14 +26,16 @@ def _get_trainable_vars(scope):
     var_list = list(filter(is_trainable, var_list))
 
     tf.logging.info('Getting trainable variable for %s' % scope)
-    #tf.logging.info('%s' % var_list)
+    #for i in var_list:
+    #    print(i.op.name)
+    tf.logging.info('%s' % var_list)
 
     return var_list
 
 def _gradient_clip(name, optimizer, loss, global_steps=None, clip_norm=5.0):
     var_list = _get_trainable_vars(name)
     grds, var = zip(*optimizer.compute_gradients(loss, var_list=var_list))
-    gradients = [gradient if gradient is None else tf.clip_by_norm(gradient, 5.0) for gradient in grds]
+    gradients = [gradient if gradient is None else tf.clip_by_value(gradient, -5.0, 5.0) for gradient in grds]
     if global_steps is not None:
         optim = optimizer.apply_gradients(zip(gradients, var), global_step=global_steps)
     else:
@@ -110,7 +114,9 @@ def train(sess, args, config):
             generator_loss = s2t_cyclic_weight * da_model.s2t_cyclic_loss + t2s_cyclic_weight * da_model.t2s_cyclic_loss + s2t_adversarial_weight * da_model.s2t_g_loss + t2s_adversarial_weight * da_model.t2s_g_loss
             da_model.summary['generator_loss'] = generator_loss
 
-            discriminator_loss = s2t_adversarial_weight * da_model.s2t_d_loss + t2s_adversarial_weight * da_model.t2s_d_loss + s2t_task_weight * da_model.transferred_task_loss + t2s_task_weight * da_model.t2s_task_loss
+            discriminator_loss = s2t_adversarial_weight * da_model.s2t_d_loss + t2s_adversarial_weight * da_model.t2s_d_loss + s2t_task_weight * da_model.transferred_task_loss 
+            if args.t2s_task:
+                discriminator_loss += t2s_task_weight * da_model_t2s_task_loss 
             da_model.summary['discriminator_loss'] = discriminator_loss
 
     else:

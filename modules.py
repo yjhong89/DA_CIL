@@ -4,6 +4,8 @@ import op
 import utils
 import argparse
 import dataset_utils
+import tensorflow.contrib.slim as slim 
+
 
 class generator(object):
     def __init__(self, channel, config, batch_size):
@@ -238,24 +240,40 @@ class discriminator(object):
         # regular GAN discriminaotr maps image to a single scalar while patchGAN maps image to an NXN array of output X
         # X_ij signifies patch_ij in input image is real or fake. -> so 70x70 patches in input images
         # equivalent manually chopped up the image into 70x70 patch, run a regular discriminator
-    def __call__(self, x, name, reuse=False):
+    def __call__(self, x, name, patch=True, reuse=False, dropout_prob=0.35, training=True):
         layer_index = 0
         with tf.variable_scope(self.module_name):
             with tf.variable_scope(name):
+                # Add optional noise
+                def add_noise(hidden, scope_num=None):
+                    if scope_num:
+                        hidden = slim.dropout(hidden, dropout_prob, is_training=training, scope='dropout_%s' % scope_num)
+                    return hidden + tf.random_normal(hidden.shape.as_list(), mean=0, stddev=0.2)
+
+
                 if reuse:
                     tf.get_variable_scope().reuse_variables()
     
                 # From cycleGAN, do not use instance Norm for the first C64 layer
                 x = op.conv2d(x, out_channel=self.channel, normalization=False, name='conv2d_%d'%layer_index)
+                x = add_noise(x, layer_index)
                 layer_index += 1
                 x = op.conv2d(x, out_channel=self.channel*2, name='conv2d_%d'%layer_index)
+                x = add_noise(x, layer_index)
                 layer_index += 1
                 x = op.conv2d(x, out_channel=self.channel*4, name='conv2d_%d'%layer_index)
+                x = add_noise(x, layer_index)
                 layer_index += 1
                 x = op.conv2d(x, out_channel=self.channel*8, stride=1, name='conv2d_%d'%layer_index)
+                x = add_noise(x, layer_index)
                 layer_index += 1
-                # After the last layer, a convolution is applied to map to a 1 dimensional output
-                x = op.conv2d(x, out_channel=1, stride=1, name='conv2d_%d'%layer_index, activation=None, normalization=False)
+
+                if patch:
+                    # After the last layer, a convolution is applied to map to a 1 dimensional output
+                    x = op.conv2d(x, out_channel=1, stride=1, name='conv2d_%d'%layer_index, activation=None, normalization=False)
+                else:
+                    x = slim.flatten(x)
+                    x = op.fc(x, 1, activation=None, dropout=False, name='fc')
 
         return x
 
