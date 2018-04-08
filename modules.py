@@ -160,7 +160,7 @@ class generator(object):
 
                 # image_size - fiter_size + 2*pad + 1 (when stride=1)
                 x = tf.pad(x, [[0,0],[3,3],[3,3],[0,0]], 'REFLECT')
-                x = op.conv2d(x, out_channel=self.channel, filter_size=7, stride=1, activation=tf.nn.relu, padding='VALID', name='conv2d_%d'%layer_index)
+                x = op.conv2d(x, out_channel=self.channel, filter_size=7, stride=1, activation=tf.nn.relu, padding='VALID', name='conv2d_%d'%layer_index, normalization=False)
                 layer_index += 1
                 x = op.conv2d(x, out_channel=self.channel*2, filter_size=3, stride=2, activation=tf.nn.relu, name='conv2d_%d'%layer_index)
                 layer_index += 1
@@ -191,8 +191,9 @@ class generator(object):
                 layer_index += 1
                 x = op.transpose_conv2d(x, out_channel=self.channel, filter_size=3, stride=2, name='transpose_conv2d_%d'%layer_index)
                 layer_index += 1
-                x = tf.pad(x, [[0,0],[3,3],[3,3],[0,0]], 'REFLECT')
-                x = op.conv2d(x, out_channel=3, filter_size=7, stride=1, padding='VALID', name='transpose_conv2d_%d'%layer_index, normalization=None, activation=tf.nn.tanh)
+                #x = tf.pad(x, [[0,0],[3,3],[3,3],[0,0]], 'REFLECT')
+                #x = op.conv2d(x, out_channel=3, filter_size=7, stride=1, padding='VALID', name='conv2d_%d'%layer_index, normalization=None, activation=tf.nn.tanh)
+                x = op.conv2d(x, out_channel=3, filter_size=1, stride=1, padding='SAME', name='conv2d_%d'%layer_index, normalization=None, activation=tf.nn.tanh)
                 
         return x
 
