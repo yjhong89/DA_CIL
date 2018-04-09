@@ -37,7 +37,7 @@ class generator(object):
                     x = tf.concat([x, noise_channel], axis=3)
 
                 with tf.variable_scope('encoder'):
-                    e1 = op.conv2d(x, out_channel=self.channel, name='conv2d_%d'%layer_index, activation=False)
+                    e1 = op.conv2d(x, out_channel=self.channel, name='conv2d_%d'%layer_index, normalization=False, activation=False)
                     layer_index += 1
                     e2 = op.conv2d(op._leaky_relu(e1), out_channel=self.channel*2, name='conv2d_%d'%layer_index, activation=False)   
                     layer_index += 1
@@ -58,13 +58,13 @@ class generator(object):
                 # U-Net architecture is with skip connections between each layer i in the encoer and layer n-i in the decoder. Concatenate activations in channel axis
                 # Dropout with 0.5
                 with tf.variable_scope('decoder'):
-                    d1 = op.transpose_conv2d(tf.nn.relu(e8), out_channel=self.channel*8, name='transpose_conv2d_%d'%layer_index, activation=False)
+                    d1 = op.transpose_conv2d(tf.nn.relu(e8), out_channel=self.channel*8, name='transpose_conv2d_%d'%layer_index, activation=False, dropout=True)
                     d1 = tf.concat([d1, e7], axis=3)
                     layer_index += 1
-                    d2 = op.transpose_conv2d(tf.nn.relu(d1), out_channel=self.channel*8, name='transpose_conv2d_%d'%layer_index, activation=False)
+                    d2 = op.transpose_conv2d(tf.nn.relu(d1), out_channel=self.channel*8, name='transpose_conv2d_%d'%layer_index, activation=False, dropout=True)
                     d2 = tf.concat([d2, e6], axis=3)
                     layer_index += 1
-                    d3 = op.transpose_conv2d(tf.nn.relu(d2), out_channel=self.channel*8, name='transpose_conv2d_%d'%layer_index, activation=False)
+                    d3 = op.transpose_conv2d(tf.nn.relu(d2), out_channel=self.channel*8, name='transpose_conv2d_%d'%layer_index, activation=False, dropout=True)
                     d3 = tf.concat([d3, e5], axis=3)
                     layer_index += 1
                     d4 = op.transpose_conv2d(tf.nn.relu(d3), out_channel=self.channel*8, name='transpose_conv2d_%d'%layer_index, activation=False)
@@ -137,8 +137,9 @@ class generator(object):
                 # Upsampling 
                 x = op.transpose_conv2d(x, out_channel=self.channel, filter_size=3, name='transpose_conv2d_%d'%layer_index)
                 layer_index += 1
-                x = tf.pad(x, [[0,0],[3,3],[3,3],[0,0]], 'REFLECT')
-                x = op.conv2d(x, out_channel=3, filter_size=7, stride=1, padding='VALID', name='transpose_conv2d_%d'%layer_index, normalization=None, activation=tf.nn.tanh)
+                #x = tf.pad(x, [[0,0],[3,3],[3,3],[0,0]], 'REFLECT')
+                #x = op.conv2d(x, out_channel=3, filter_size=7, stride=1, padding='VALID', name='transpose_conv2d_%d'%layer_index, normalization=None, activation=tf.nn.tanh)
+                #x = op.conv2d(x, out_channel=3, filter_size=1, stride=1, padding='VALID', name='transpose_conv2d_%d'%layer_index, normalization=None, activation=tf.nn.tanh)
                 
 
         return x
@@ -179,12 +180,12 @@ class generator(object):
                 residual_index += 1
                 x, layer_index = op.residual_block(x, out_dim=self.channel*4, layer_index=layer_index, name='residual_%d'%residual_index)
                 residual_index += 1
-                x, layer_index = op.residual_block(x, out_dim=self.channel*4, layer_index=layer_index, name='residual_%d'%residual_index)
-                residual_index += 1
-                x, layer_index = op.residual_block(x, out_dim=self.channel*4, layer_index=layer_index, name='residual_%d'%residual_index)
-                residual_index += 1
-                x, layer_index = op.residual_block(x, out_dim=self.channel*4, layer_index=layer_index, name='residual_%d'%residual_index)
-                residual_index += 1
+               # x, layer_index = op.residual_block(x, out_dim=self.channel*4, layer_index=layer_index, name='residual_%d'%residual_index)
+                #residual_index += 1
+                #x, layer_index = op.residual_block(x, out_dim=self.channel*4, layer_index=layer_index, name='residual_%d'%residual_index)
+                #residual_index += 1
+                #x, layer_index = op.residual_block(x, out_dim=self.channel*4, layer_index=layer_index, name='residual_%d'%residual_index)
+                #residual_index += 1
 
                 # Upsampling 
                 x = op.transpose_conv2d(x, out_channel=self.channel*2, filter_size=3, stride=2, name='transpose_conv2d_%d'%layer_index)
@@ -193,7 +194,8 @@ class generator(object):
                 layer_index += 1
                 #x = tf.pad(x, [[0,0],[3,3],[3,3],[0,0]], 'REFLECT')
                 #x = op.conv2d(x, out_channel=3, filter_size=7, stride=1, padding='VALID', name='conv2d_%d'%layer_index, normalization=None, activation=tf.nn.tanh)
-                x = op.conv2d(x, out_channel=3, filter_size=1, stride=1, padding='SAME', name='conv2d_%d'%layer_index, normalization=None, activation=tf.nn.tanh)
+                #x = op.conv2d(x, out_channel=3, filter_size=1, stride=1, padding='SAME', name='conv2d_%d'%layer_index, normalization=None, activation=tf.nn.tanh)
+                x = op.transpose_conv2d(x, out_channel=3, filter_size=7, stride=1, name='transpose_conv2d_%d'%layer_index, normalization=False, activation=tf.nn.tanh)
                 
         return x
 

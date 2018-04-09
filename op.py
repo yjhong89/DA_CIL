@@ -109,7 +109,7 @@ def conv2d(x, out_channel, filter_size=4, stride=2, name='conv2d', activation=_l
 
 # size_out = stride*(size_in) + filter_size - 2*pad
 # Literally transposed version of convolution
-def transpose_conv2d(x, out_channel, filter_size=4, stride=2, name='transpose_conv2d', activation=tf.nn.relu, normalization=True):
+def transpose_conv2d(x, out_channel, filter_size=4, stride=2, name='transpose_conv2d', activation=tf.nn.relu, normalization=True, dropout=False, dropout_rate=0.5):
     batch_size, height, width, in_channel = x.get_shape().as_list()
     new_height, new_width = int(height*stride), int(width*stride)
     out_shape = tf.stack([batch_size, new_height, new_width, out_channel])
@@ -120,6 +120,8 @@ def transpose_conv2d(x, out_channel, filter_size=4, stride=2, name='transpose_co
         output = tf.nn.conv2d_transpose(x, weight, output_shape=out_shape, strides=[1, stride, stride, 1], padding='SAME', data_format='NHWC', name='transposed_convolution')
         output = output + bias
 
+        if dropout:
+            output = tf.nn.dropout(output, dropout_rate)
         if normalization:
             output = _instance_norm(output)
         if activation:
