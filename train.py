@@ -28,7 +28,7 @@ def _get_trainable_vars(scope):
     tf.logging.info('Getting trainable variable for %s' % scope)
     #for i in var_list:
     #    print(i.op.name)
-    tf.logging.info('%s' % var_list)
+    #tf.logging.info('%s' % var_list)
 
     return var_list
 

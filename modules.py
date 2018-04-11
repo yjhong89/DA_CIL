@@ -233,9 +233,10 @@ def project_latent_vars(shape, latent_vars, combine_method, name):
 
 
 class discriminator(object):
-    def __init__(self, channel):
+    def __init__(self, channel, group_size=4):
         self.channel = channel
         self.module_name = 'discriminator'
+        self.group_size = group_size
 
     # 70x70 PatchGAN to model high frequency region
     # why 70x70?
@@ -266,6 +267,8 @@ class discriminator(object):
                 x = op.conv2d(x, out_channel=self.channel*4, name='conv2d_%d'%layer_index)
                 x = add_noise(x, layer_index)
                 layer_index += 1
+                if self.group_size > 1:
+                    x = self.minibatch_discrimination(x, self.group_size)
                 x = op.conv2d(x, out_channel=self.channel*8, stride=1, name='conv2d_%d'%layer_index)
                 x = add_noise(x, layer_index)
                 layer_index += 1
@@ -278,6 +281,35 @@ class discriminator(object):
                     x = op.fc(x, 1, activation=None, dropout=False, name='fc')
 
         return x
+
+    # From progressive GAN
+    def minibatch_discrimination(self, x, group_size=4):
+        batch_size, height, width, channel = x.get_shape().as_list()
+        with tf.variable_scope('minibatch_discrimination'):
+            group_size = tf.minimum(group_size, batch_size)
+            # Batch size must be divisible by group size
+                # [G, M, H, W, C]
+            y = tf.reshape(x, [group_size, -1, height, width, channel])
+            # First compute the standard deviation for each feature in each spatial location over the minibatch
+                # If group_size=1, y - mean would be zero
+                # For full minibatch discriminator, make group size equal to batch size
+                # In here, we do this in terms of group, [G, M, H, W, C]
+            y = y - tf.reduce_mean(y, axis=0, keep_dims=True)
+            # Calculate variance and then standard deviation
+                # [M, H, W, C]
+            y = tf.sqrt(tf.reduce_mean(tf.square(y), axis=0) + 1e-8)
+            # Average these estimates over all featuers and spatial locations to arrive at a single value
+                # [M, 1, 1, 1]
+            y = tf.reduce_mean(y, axis=[1,2,3], keep_dims=True)
+            # Replicate the value 
+            y = tf.tile(y, [group_size, height, width, 1])
+        # Concatenate it to all spatial locations and over the minibatch, yielding one additional feature map
+        return tf.concat([x, y], axis=3)
+
+
+
+
+
 
 class task_regression(object):
     def __init__(self, channel, image_fc, measurement_fc, command_fc, dropout, name='task_regression'):
