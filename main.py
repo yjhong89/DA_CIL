@@ -19,13 +19,14 @@ def main():
     parser.add_argument('--clip_norm', type=float, default=5.0)
     parser.add_argument('--optimizer', type=str, default='rms')
     parser.add_argument('--training', type=utils.str2bool, default='t')
-    parser.add_argument('--max_iter', type=int, default=200000)
-    parser.add_argument('--t2s_task', type=utils.str2bool, default='f')
+    parser.add_argument('--max_iter', type=int, default=400000)
+    parser.add_argument('--t2s_task', type=utils.str2bool, default='t')
+    parser.add_argument('--pixel_norm', type=utils.str2bool, default='t')
     parser.add_argument('--learning_rate', type=float, default=0.005)
     parser.add_argument('--lr_decay', type=utils.str2bool, default='y')
     parser.add_argument('--save_interval', type=int, default=1000)
     parser.add_argument('--summary_interval', type=int, default=10)
-    parser.add_argument('--load_ckpt', type=utils.str2bool, default='f')
+    parser.add_argument('--load_ckpt', type=utils.str2bool, default='t')
 
     args = parser.parse_args()
     if args.log:

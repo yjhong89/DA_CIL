@@ -27,7 +27,7 @@ def adversarial_loss(real_sample, fake_sample, real_logits, fake_logits, discrim
         index_summation = (tf.constant(0), tf.constant(0.0))
         # The loop condition, i < 12*20
         def condition(index, summation):
-            return tf.less(index, tf.shape(each_logits)[0])
+            return tf.less(index, batch_size)
 
         def body(index, summation):
             gradient_i = tf.gather(each_logits, index)

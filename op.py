@@ -16,6 +16,13 @@ def _instance_norm(x, training=True, name='instance_norm', epsilon=1e-5):
         
         return scale * normalized + shift
 
+# From progressive GAN
+def _pixel_norm(x, name='pixel_norm', epsilon=1e-8, training=True):
+    # NHWC
+    with tf.variable_scope(name):
+        return x * tf.rsqrt(tf.reduce_mean(tf.square(x), axis=3, keep_dims=True) + epsilon)
+
+
 def _batch_norm(x, training=True, name='batch_norm', decay=0.99, epsilon=1e-5):
     _, _, _, channel = x.get_shape().as_list()
     with tf.variable_scope(name):
@@ -38,14 +45,14 @@ def _batch_norm(x, training=True, name='batch_norm', decay=0.99, epsilon=1e-5):
 def _leaky_relu(x, slope=0.2):
     return tf.maximum(x, 0.2*x)
 
-def residual_block(x, out_dim, layer_index, filter_size=3, stride=1, name='residual'):
+def residual_block(x, out_dim, layer_index, filter_size=3, stride=1, name='residual', normalization=_instance_norm):
     with tf.name_scope(name):
         padding = int((filter_size - 1) / 2)
         y = tf.pad(x, [[0,0],[padding, padding], [padding,padding],[0,0]], 'REFLECT')
-        y = conv2d(y, out_channel=out_dim, filter_size=filter_size, stride=stride, name='conv2d_%d'%layer_index, activation=tf.nn.relu, padding='VALID')
+        y = conv2d(y, out_channel=out_dim, filter_size=filter_size, stride=stride, name='conv2d_%d'%layer_index, activation=tf.nn.relu, padding='VALID', normalization=normalization)
         index = layer_index + 1
         y = tf.pad(y, [[0,0],[padding, padding], [padding,padding],[0,0]], 'REFLECT')
-        y = conv2d(y, out_channel=out_dim, filter_size=filter_size, stride=stride, name='conv2d_%d'%index, activation=False, padding='VALID')
+        y = conv2d(y, out_channel=out_dim, filter_size=filter_size, stride=stride, name='conv2d_%d'%index, activation=False, padding='VALID', normalization=normalization)
         index += 1
     return x + y, index
 
@@ -109,7 +116,7 @@ def conv2d(x, out_channel, filter_size=4, stride=2, name='conv2d', activation=_l
 
 # size_out = stride*(size_in) + filter_size - 2*pad
 # Literally transposed version of convolution
-def transpose_conv2d(x, out_channel, filter_size=4, stride=2, name='transpose_conv2d', activation=tf.nn.relu, normalization=True, dropout=False, dropout_rate=0.5):
+def transpose_conv2d(x, out_channel, filter_size=4, stride=2, name='transpose_conv2d', activation=tf.nn.relu, normalization=_instance_norm, dropout=False, dropout_rate=0.5):
     batch_size, height, width, in_channel = x.get_shape().as_list()
     new_height, new_width = int(height*stride), int(width*stride)
     out_shape = tf.stack([batch_size, new_height, new_width, out_channel])
@@ -123,7 +130,7 @@ def transpose_conv2d(x, out_channel, filter_size=4, stride=2, name='transpose_co
         if dropout:
             output = tf.nn.dropout(output, dropout_rate)
         if normalization:
-            output = _instance_norm(output)
+            output = normalization(output)
         if activation:
             output = activation(output)
         #print('upsampling', output.get_shape().as_list())

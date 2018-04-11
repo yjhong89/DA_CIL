@@ -76,9 +76,6 @@ def train(sess, args, config):
     writer = tf.summary.FileWriter(save_dir, sess.graph)
     global_step = tf.train.get_or_create_global_step()
 
-    saver = tf.train.Saver(max_to_keep=5)
-
-
     if model_type == 'da_cil':
         with tf.name_scope(model_type + '_batches'):
             source_image_batch, source_label_batch, source_command_batch = dataset_factory.get_batches(tfrecord_dir, whether_for_source=True, data_type=args.data_type, config=config)
@@ -116,7 +113,7 @@ def train(sess, args, config):
 
             discriminator_loss = s2t_adversarial_weight * da_model.s2t_d_loss + t2s_adversarial_weight * da_model.t2s_d_loss + s2t_task_weight * da_model.transferred_task_loss 
             if args.t2s_task:
-                discriminator_loss += t2s_task_weight * da_model_t2s_task_loss 
+                discriminator_loss += t2s_task_weight * da_model.t2s_task_loss 
             da_model.summary['discriminator_loss'] = discriminator_loss
 
     else:
@@ -138,6 +135,9 @@ def train(sess, args, config):
        
     generator_summary, discriminator_summary = utils.summarize(da_model.summary, args.t2s_task) 
     utils.config_summary(save_dir, s2t_adversarial_weight, t2s_adversarial_weight, s2t_cyclic_weight, t2s_cyclic_weight, s2t_task_weight, t2s_task_weight, discriminator_step, generator_step, adversarial_mode, whether_noise, noise_dim)
+
+
+    saver = tf.train.Saver(max_to_keep=5)
     sess.run(tf.group(tf.global_variables_initializer(), tf.local_variables_initializer()))
 
     if args.load_ckpt:

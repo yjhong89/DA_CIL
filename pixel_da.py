@@ -16,7 +16,7 @@ class model():
         #   dropout = config.getfloat('classifier', 'dropout')
 
         self.generator_type = config.get('generator', 'type')
-        self.generator = modules.generator(generator_channel, config, self.args.batch_size)
+        self.generator = modules.generator(generator_channel, config, self.args)
         self.discriminator = modules.discriminator(discriminator_channel)
         
         self.transferred_classifier = modules.task_classifier(classifier_channel, num_classes=3, training=self.args.training) 
