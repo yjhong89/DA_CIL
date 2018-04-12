@@ -308,9 +308,6 @@ class discriminator(object):
 
 
 
-
-
-
 class task_regression(object):
     def __init__(self, channel, image_fc, measurement_fc, command_fc, dropout, name='task_regression'):
         self.channel = channel
