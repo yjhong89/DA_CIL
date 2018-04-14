@@ -4,10 +4,10 @@ import argparse
 import configparser
 import utils
 from train import train
-#import inference
+from evaluation import evaluation
 
 os.environ['CUDA_DEVICE_ORDER'] = 'PCI_BUS_ID'
-os.environ['CUDA_VISIBLE_DEVICES'] = '0'
+os.environ['CUDA_VISIBLE_DEVICES'] = '2'
 
 
 def main():
@@ -18,7 +18,7 @@ def main():
     parser.add_argument('--batch_size', type=int, default=4)
     parser.add_argument('--clip_norm', type=float, default=5.0)
     parser.add_argument('--optimizer', type=str, default='rms')
-    parser.add_argument('--training', type=utils.str2bool, default='t')
+    parser.add_argument('--training', type=utils.str2bool, default='f')
     parser.add_argument('--max_iter', type=int, default=400000)
     parser.add_argument('--t2s_task', type=utils.str2bool, default='t')
     parser.add_argument('--pixel_norm', type=utils.str2bool, default='t')
@@ -44,6 +44,7 @@ def main():
             train(sess, args, config)
         else:
             tf.logging.info('Inference')
+            evaluation(sess, args, config)
 
 
 if __name__ == "__main__":
