@@ -129,7 +129,7 @@ def evaluation(sess, args, config):
             np_head_acc[i]            /= np_head_num[i]
             np_lateral_cmd[i]         /= np_lateral_num[i]
             np_head_cmd[i]            /= np_head_num[i]
-        print('lateral_confusion')
+        print('\nlateral_confusion')
         print(np_lateral_confusion)
         print('head_confusion')
         print(np_head_confusion)
