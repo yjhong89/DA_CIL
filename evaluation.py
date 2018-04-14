@@ -72,8 +72,8 @@ def evaluation(sess, args, config):
     lateral_confusion_table = tf.multiply(target_lateral_one_hot_label, tf.expand_dims(tf.nn.softmax(da_model.target_lateral_logits),1))
     head_confusion_table = tf.multiply(target_head_one_hot_label, tf.expand_dims(tf.nn.softmax(da_model.target_head_logits),1))
 
-    target_high_pass = op.neg_gaussian_filter(target_image_batch)
-    trans_high_pass  = op.neg_gaussian_filter(da_model.g_s2t)
+    #target_high_pass = op.neg_gaussian_filter(target_image_batch)
+    #trans_high_pass  = op.neg_gaussian_filter(da_model.g_s2t)
 
     coord = tf.train.Coordinator()
     threads = tf.train.start_queue_runners(sess, coord)
@@ -95,7 +95,8 @@ def evaluation(sess, args, config):
     
         for idx in range(test_batch_num):
             if idx == 0:
-                source, transferred_im, np_tar_high_pass, np_trans_high_pass = sess.run([source_image_batch, da_model.g_s2t, target_high_pass, trans_high_pass])
+                #source, transferred_im, np_tar_high_pass, np_trans_high_pass = sess.run([source_image_batch, da_model.g_s2t, target_high_pass, trans_high_pass])
+                source, transferred_im = sess.run([source_image_batch, da_model.g_s2t])
                 import matplotlib.pyplot as plt
                 import scipy.misc
                 im_dir = os.path.join(ckpt_dir,'im')
@@ -104,8 +105,8 @@ def evaluation(sess, args, config):
                 for im_idx  in range(4):
                     scipy.misc.imsave(os.path.join(im_dir,'source%d.png' % im_idx), source[im_idx,:,:,:])
                     scipy.misc.imsave(os.path.join(im_dir,'trans%d.png' % im_idx), transferred_im[im_idx,:,:,:])
-                    scipy.misc.imsave(os.path.join(im_dir,'trans_high%d.png' % im_idx), np.squeeze(np_trans_high_pass[im_idx,:,:,:]))
-                    scipy.misc.imsave(os.path.join(im_dir,'tar_high%d.png' % im_idx), np.squeeze(np_tar_high_pass[im_idx]))
+                    #scipy.misc.imsave(os.path.join(im_dir,'trans_high%d.png' % im_idx), np.squeeze(np_trans_high_pass[im_idx,:,:,:]))
+                    #scipy.misc.imsave(os.path.join(im_dir,'tar_high%d.png' % im_idx), np.squeeze(np_tar_high_pass[im_idx]))
 
             t1,t2,x1,x2,y1,y2,z1,z2,a1,a2 = sess.run([lateral_confusion_table, head_confusion_table, tf.reduce_sum(lateral_confusion_table,0),tf.reduce_sum(head_confusion_table,0),
                                                         lateral_label_num, head_label_num,
