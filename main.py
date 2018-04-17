@@ -7,7 +7,7 @@ from train import train
 from evaluation import evaluation
 
 os.environ['CUDA_DEVICE_ORDER'] = 'PCI_BUS_ID'
-os.environ['CUDA_VISIBLE_DEVICES'] = '2'
+os.environ['CUDA_VISIBLE_DEVICES'] = '1'
 
 
 def main():
@@ -15,10 +15,10 @@ def main():
     parser.add_argument('-d', '--delete', action='store_true')
     parser.add_argument('-l', '--log', action='store_true')
     parser.add_argument('--config', default='config.ini')
-    parser.add_argument('--batch_size', type=int, default=4)
+    parser.add_argument('--batch_size', type=int, default=8)
     parser.add_argument('--clip_norm', type=float, default=5.0)
     parser.add_argument('--optimizer', type=str, default='rms')
-    parser.add_argument('--training', type=utils.str2bool, default='f')
+    parser.add_argument('--training', type=utils.str2bool, default='t')
     parser.add_argument('--max_iter', type=int, default=400000)
     parser.add_argument('--t2s_task', type=utils.str2bool, default='t')
     parser.add_argument('--pixel_norm', type=utils.str2bool, default='t')

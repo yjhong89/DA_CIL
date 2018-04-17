@@ -14,12 +14,15 @@ class generator(object):
         self.config = config
         self.args = args
 
+        self.out_channel = self.config.getint(self.module_name, 'out_channel')
         self.latent_vars = dict()
         # Add latent noise vector to image input
         if self.config.getboolean(self.module_name, 'noise'):
             tf.logging.info('Using random noise')
             noise = tf.random_uniform(shape=[self.args.batch_size, self.config.getint(self.module_name, 'noise_dim')], minval=-1, maxval=1, dtype=tf.float32, name='random_noise')
             self.latent_vars['noise'] = noise
+        elif(self.out_channel != 3):
+            raise ValueError('No random noise injection')
 
     def normalize(self):
         return op._pixel_norm if self.args.pixel_norm else op._instance_norm
@@ -83,9 +86,9 @@ class generator(object):
                     d7 = op.transpose_conv2d(tf.nn.relu(d6), out_channel=self.channel, name='transpose_conv2d_%d'%layer_index, activation=False, normalization=normalize_func)
                     d7 = tf.concat([d7, e1], axis=3)
                     layer_index += 1
-                    d8 = op.transpose_conv2d(tf.nn.relu(d7), out_channel=3, name='transpose_conv2d_%d'%layer_index, normalization=False, activation=tf.nn.tanh)
+                    d8 = op.transpose_conv2d(tf.nn.relu(d7), out_channel=self.out_channel, name='transpose_conv2d_%d'%layer_index, normalization=False, activation=tf.nn.tanh)
                 
-        return d8 
+        return d8, noise_channel
 
 
     # Dilated Residual Networks
@@ -139,7 +142,7 @@ class generator(object):
                 layer_index += 1
                 #x = tf.pad(x, [[0,0],[3,3],[3,3],[0,0]], 'REFLECT')
                 #x = op.conv2d(x, out_channel=3, filter_size=7, stride=1, padding='VALID', name='transpose_conv2d_%d'%layer_index, normalization=None, activation=tf.nn.tanh)
-                x = op.transpose_conv2d(x, out_channel=3, filter_size=7, stride=1, name='transpose_conv2d_%d'%layer_index, normalization=None, activation=tf.nn.tanh)
+                x = op.transpose_conv2d(x, out_channel=self.out_channel, filter_size=7, stride=1, name='transpose_conv2d_%d'%layer_index, normalization=None, activation=tf.nn.tanh)
                  
 
         return x
@@ -195,19 +198,10 @@ class generator(object):
                 #x = tf.pad(x, [[0,0],[3,3],[3,3],[0,0]], 'REFLECT')
                 #x = op.conv2d(x, out_channel=3, filter_size=7, stride=1, padding='VALID', name='conv2d_%d'%layer_index, normalization=None, activation=tf.nn.tanh)
                 #x = op.conv2d(x, out_channel=3, filter_size=1, stride=1, padding='SAME', name='conv2d_%d'%layer_index, normalization=None, activation=tf.nn.tanh)
-                x = op.transpose_conv2d(x, out_channel=3, filter_size=7, stride=1, name='transpose_conv2d_%d'%layer_index, normalization=False, activation=tf.nn.tanh)
+                x = op.transpose_conv2d(x, out_channel=self.out_channel, filter_size=7, stride=1, name='transpose_conv2d_%d'%layer_index, normalization=False, activation=tf.nn.tanh)
                 
-        return x
+        return x, noise_channel
 
-
-def project_latent_vars(shape, latent_vars, combine_method, name):
-    values = list()
-    # Keys
-    for var in latent_vars:
-        with tf.variable_scope(var):
-            # Project and reshape noise to NHWC
-            projected = op.fc(latent_vars[var], np.prod(shape[1:]), dropout=False, name=name+var)
-        values.append(tf.reshape(projected, [shape[0]] + shape[1:]))
 
 def project_latent_vars(shape, latent_vars, combine_method, name):
     values = list()
@@ -234,7 +228,7 @@ def project_latent_vars(shape, latent_vars, combine_method, name):
 
 
 class discriminator(object):
-    def __init__(self, channel, group_size=4):
+    def __init__(self, channel, group_size=8):
         self.channel = channel
         self.module_name = 'discriminator'
         self.group_size = group_size

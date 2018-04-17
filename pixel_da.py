@@ -16,6 +16,7 @@ class model():
         #   dropout = config.getfloat('classifier', 'dropout')
 
         self.generator_type = config.get('generator', 'type')
+        self.generator_out_channel = config.getint('generator', 'out_channel')
         self.generator = modules.generator(generator_channel, config, self.args)
         self.discriminator = modules.discriminator(discriminator_channel)
         
@@ -32,44 +33,28 @@ class model():
         with tf.name_scope('generator'):
             self.summary['source_image'] = source
             self.summary['target_image'] = target
-            if self.generator_type == 'DRN':
-                self.g_s2t = self.generator.generator_drn(source, name='G_S2T')
-                # [batch, height, width, 3]
-                self.summary['source_transferred'] = self.g_s2t                
-                self.g_t2s = self.generator.generator_drn(target, name='G_T2S')
-                self.summary['target_transferred'] = self.g_t2s
+            tf.logging.info('Use %s architecture' % self.generator_type)
+            try:
+                generator_func = getattr(self.generator, self.generator.module_name + '_' + self.generator_type.lower())
+                print(generator_func)
+            except:
+                raise AttributeError('%s not supproted' % self.generator_type)
 
-                self.s2t2s = self.generator.generator_drn(self.g_s2t, reuse=True, name='G_T2S')
-                self.summary['back2source'] = self.s2t2s
-                self.t2s2t = self.generator.generator_drn(self.g_t2s, reuse=True, name='G_S2T')
-                self.summary['back2target'] = self.t2s2t
-            elif self.generator_type == 'UNET':
-                self.g_s2t = self.generator.generator_unet(source, name='G_S2T')
-                self.summary['source_transferred'] = self.g_s2t
-                self.g_t2s = self.generator.generator_unet(target, name='G_T2S')    
-                self.summary['target_transferred'] = self.g_t2s
+            self.g_s2t, self.source_noise = generator_func(source, name='G_S2T')
+            self.g_t2s, self.target_noise = generator_func(target, name='G_T2S')
+            self.s2t2s, _ = generator_func(self.g_s2t[:,:,:,:3], reuse=True, name='G_T2S')
+            self.t2s2t, _ = generator_func(self.g_t2s[:,:,:,:3], reuse=True, name='G_S2T')
 
-                self.s2t2s = self.generator.generator_unet(self.g_s2t, reuse=True, name='G_T2S')
-                self.summary['back2source'] = self.s2t2s
-                self.t2s2t = self.generator.generator_unet(self.g_t2s, reuse=True, name='G_S2T') 
-                self.summary['back2target'] = self.t2s2t
-            elif self.generator_type == 'RESNET':
-                self.g_s2t = self.generator.generator_resnet(source, name='G_S2T')
-                self.summary['source_transferred'] = self.g_s2t
-                self.g_t2s = self.generator.generator_resnet(target, name='G_T2S')    
-                self.summary['target_transferred'] = self.g_t2s
-
-                self.s2t2s = self.generator.generator_resnet(self.g_s2t, reuse=True, name='G_T2S')
-                self.summary['back2source'] = self.s2t2s
-                self.t2s2t = self.generator.generator_resnet(self.g_t2s, reuse=True, name='G_S2T') 
-                self.summary['back2target'] = self.t2s2t
-            else:
-                raise Exception('Not supported type')
+            self.summary['source_transferred'] = self.g_s2t[:,:,:,:3]                
+            self.summary['target_transferred'] = self.g_t2s[:,:,:,:3]
+            self.summary['back2source'] = self.s2t2s[:,:,:,:3]
+            self.summary['back2target'] = self.t2s2t[:,:,:,:3]
+            
 
         with tf.name_scope('discriminator'):
             # Patch discriminator
-            self.s2t_fake = self.discriminator(self.g_s2t, name='D_S2T')
-            self.t2s_fake = self.discriminator(self.g_t2s, name='D_T2S')
+            self.s2t_fake = self.discriminator(self.g_s2t[:,:,:,:3], name='D_S2T')
+            self.t2s_fake = self.discriminator(self.g_t2s[:,:,:,:3], name='D_T2S')
 
             self.target_real = self.discriminator(target, reuse=True, name='D_S2T')
             self.source_real = self.discriminator(source, reuse=True, name='D_T2S')
@@ -86,8 +71,13 @@ class model():
 
     def create_objective(self, head_labels, lateral_labels, mode='LS'):
         with tf.name_scope('cyclic'):
-            self.s2t_cyclic_loss = losses.cyclic_loss(self.summary['source_image'], self.s2t2s)
-            self.t2s_cyclic_loss = losses.cyclic_loss(self.summary['target_image'], self.t2s2t)
+            if self.generator_out_channel == 4:
+                self.s2t_cyclic_loss = losses.cyclic_loss(tf.concat([self.summary['source_image'], self.source_noise], 3), self.s2t2s)
+                self.t2s_cyclic_loss = losses.cyclic_loss(tf.concat([self.summary['target_image'], self.target_noise], 3), self.t2s2t)
+            else:
+                self.s2t_cyclic_loss = losses.cyclic_loss(self.summary['source_image'], self.s2t2s)
+                self.t2s_cyclic_loss = losses.cyclic_loss(self.summary['target_image'], self.t2s2t)
+                
             self.summary['cyclic_loss'] = self.s2t_cyclic_loss + self.t2s_cyclic_loss
         
         # Wasserstein with gradient-penalty
