@@ -36,7 +36,6 @@ class model():
             tf.logging.info('Use %s architecture' % self.generator_type)
             try:
                 generator_func = getattr(self.generator, self.generator.module_name + '_' + self.generator_type.lower())
-                print(generator_func)
             except:
                 raise AttributeError('%s not supproted' % self.generator_type)
 
