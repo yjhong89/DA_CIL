@@ -240,12 +240,16 @@ class discriminator(object):
         # equivalent manually chopped up the image into 70x70 patch, run a regular discriminator
     def __call__(self, x, name, patch=True, reuse=False, dropout_prob=0.35, training=True):
         layer_index = 0
+        if training:
+            self.dropout_prob = dropout_prob
+        else:
+            self.dropout_prob = 1.0
         with tf.variable_scope(self.module_name):
             with tf.variable_scope(name):
                 # Add optional noise
                 def add_noise(hidden, scope_num=None):
                     if scope_num:
-                        hidden = slim.dropout(hidden, dropout_prob, is_training=training, scope='dropout_%s' % scope_num)
+                        hidden = slim.dropout(hidden, self.dropout_prob, is_training=training, scope='dropout_%s' % scope_num)
                     return hidden + tf.random_normal(hidden.shape.as_list(), mean=0, stddev=0.2)
 
 
@@ -304,21 +308,28 @@ class discriminator(object):
 
 
 class task_regression(object):
-    def __init__(self, channel, image_fc, measurement_fc, command_fc, dropout, name='task_regression'):
+    def __init__(self, channel, image_fc, measurement_fc, command_fc, name='task_regression', training=True):
         self.channel = channel
         self.name = name
         self.image_fc = image_fc
         self.measurement_fc = measurement_fc
         self.command_fc = command_fc
         self.num_command = 4
-        self.dropout = dropout
+        self.training = training    
+        if self.training:
+            self.dropout = [1.0] * 2
+        else:
+            self.dropout = [0.5, 0.2]
+
+    
         # To optimize jointly with disicriminator since task regression and disicriminator are not related
         self.module_name = 'disciminator'
 
 
-    def __call__(self, image, measurements, reuse=False):
+    def __call__(self, image, measurements, reuse_private=False, reuse_shared=False, private='private', shared='shared_task', mode='RESNET'):
         image_layer_index = 0
         measurement_layer_index = 0
+        
         branches = list()
         
         with tf.variable_scope(self.module_name):
@@ -327,31 +338,49 @@ class task_regression(object):
                     tf.get_variable_scope().reuse_variables()
 
                 with tf.variable_scope('image_module'):
-                    x = op.conv2d(image, out_channel=self.channel, filter_size=5, stride=2, normalization=False, activation=tf.nn.relu, name='conv2d_%d'%image_layer_index)
-                    image_layer_index += 1
-                    x = op.conv2d(x, out_channel=self.channel, filter_size=3, stride=1, activation=tf.nn.relu, name='conv2d_%d'%image_layer_index)
-                    image_layer_index += 1
+                    if mode == 'RESNET':
+                        with tf.variable_scope(private, reuse_private):
+                            x = op.conv2d(image, out_channel=self.channel, filter_size=7, stride=2, normalization=op._batch_norm, activation=tf.nn.relu, name='conv2d_%d'image_layer_index)
+                        image_layer_index += 1
     
-                    x = op.conv2d(x, out_channel=self.channel*2, filter_size=3, stride=2, activation=tf.nn.relu, name='conv2d_%d'%image_layer_index)
-                    image_layer_index += 1
-                    x = op.conv2d(x, out_channel=self.channel*2, filter_size=3, stride=1, activation=tf.nn.relu, name='conv2d_%d'%image_layer_index)
-                    image_layer_index += 1
+                        with tf.variable_scope(shared, reuse_shared):
+                            x, image_layer_index = residual_block(x, out_channel=self.channel, image_layer_index, normalization=op._batch_norm, downsample=False, training=self.training)
+                            x, image_layer_index = residual_block(x, out_channel=self.channel, image_layer_index, normalization=op._batch_norm, downsample=False, training=self.training)
+                            x, image_layer_index = residual_block(x, out_channel=self.channel*2, image_layer_index, normalization=op._batch_norm, downsample=True, training=self.training)
+                            x, image_layer_index = residual_block(x, out_channel=self.channel*2, image_layer_index, normalization=op._batch_norm, downsample=False, training=self.training)
+                            x, image_layer_index = residual_block(x, out_channel=self.channel*4, image_layer_index, normalization=op._batch_norm, downsample=True, training=self.training)
+                            x, image_layer_index = residual_block(x, out_channel=self.channel*4, image_layer_index, normalization=op._batch_norm, downsample=False, training=self.training)
+                            x, image_layer_index = residual_block(x, out_channel=self.channel*8, image_layer_index, normalization=op._batch_norm, downsample=True, training=self.training)
+                            x, image_layer_index = residual_block(x, out_channel=self.channel*8, image_layer_index, normalization=op._batch_norm, downsample=False, training=self.training)
+               
+                    else:
+                        with tf.variable_scope(private, reuse_private):
+                            x = op.conv2d(image, out_channel=self.channel, filter_size=5, stride=2, normalization=False, activation=tf.nn.relu, name='conv2d_%d'%image_layer_index)
+                            image_layer_index += 1
+                        with tf.variable_scope(shared, reuse_shared):
+                            x = op.conv2d(x, out_channel=self.channel, filter_size=3, stride=1, activation=tf.nn.relu, name='conv2d_%d'%image_layer_index)
+                            image_layer_index += 1
+        
+                            x = op.conv2d(x, out_channel=self.channel*2, filter_size=3, stride=2, activation=tf.nn.relu, name='conv2d_%d'%image_layer_index)
+                            image_layer_index += 1
+                            x = op.conv2d(x, out_channel=self.channel*2, filter_size=3, stride=1, activation=tf.nn.relu, name='conv2d_%d'%image_layer_index)
+                            image_layer_index += 1
     
-                    x = op.conv2d(x, out_channel=self.channel*4, filter_size=3, stride=2, activation=tf.nn.relu, name='conv2d_%d'%image_layer_index)
-                    image_layer_index += 1
-                    x = op.conv2d(x, out_channel=self.channel*4, filter_size=3, stride=1, activation=tf.nn.relu, name='conv2d_%d'%image_layer_index) 
-                    image_layer_index += 1
-                    x = op.conv2d(x, out_channel=self.channel*8, filter_size=3, stride=1, activation=tf.nn.relu, name='conv2d_%d'%image_layer_index)
-                    image_layer_index += 1
-                    x = op.conv2d(x, out_channel=self.channel*8, filter_size=3, stride=1, activation=tf.nn.relu, name='conv2d_%d'%image_layer_index)
-                    image_layer_index += 1
-    
+                            x = op.conv2d(x, out_channel=self.channel*4, filter_size=3, stride=2, activation=tf.nn.relu, name='conv2d_%d'%image_layer_index)
+                            image_layer_index += 1
+                            x = op.conv2d(x, out_channel=self.channel*4, filter_size=3, stride=1, activation=tf.nn.relu, name='conv2d_%d'%image_layer_index) 
+                            image_layer_index += 1
+                            x = op.conv2d(x, out_channel=self.channel*8, filter_size=3, stride=1, activation=tf.nn.relu, name='conv2d_%d'%image_layer_index)
+                            image_layer_index += 1
+                            x = op.conv2d(x, out_channel=self.channel*8, filter_size=3, stride=1, activation=tf.nn.relu, name='conv2d_%d'%image_layer_index)
+                            image_layer_index += 1
+   
                     x_shape = x.get_shape().as_list()
                     # Fully connected layer
                     flatten = tf.reshape(x, [-1, x_shape.prod[1:]])
-                    x = op.fc(flatten, self.image_fc, dropout_ratio=self.dropout, name='fc_%d'%image_layer_index)
+                    x = op.fc(flatten, self.image_fc, dropout_ratio=self.dropout[1], name='fc_%d'%image_layer_index)
                     image_layer_index += 1
-                    x = op.fc(x, self.image_fc, dropout_ratio=self.dropout, name='fc_%d'%image_layer_index)
+                    x = op.fc(x, self.image_fc, dropout_ratio=self.dropout[1], name='fc_%d'%image_layer_index)
     
                 with tf.variable_scope('measurement_module'):
                     y = op.fc(measurements, self.measurement_fc, dropout_ratio=self.dropout, name='fc_%d'%measurement_layer_index)
@@ -360,16 +389,16 @@ class task_regression(object):
                     
                 with tf.variable_scope('joint'):
                     joint = tf.concat([x,y], axis=-1, name='joint_representation')
-                    joint = op.fc(joint, self.image_fc, dropout_ratio=self.dropout, name='fc')
+                    joint = op.fc(joint, self.image_fc, dropout_ratio=self.dropout[0], name='fc')
         
                 for i in len(self.num_commands):
                     branch_layer_index = 0
                     with tf.variable_scope('branch_%d'%i):
-                        branch_output = op.fc(joint, self.branch_fc, dropout_ratio=self.dropout, name='fc_%d'%branch_layer_index)
+                        branch_output = op.fc(joint, self.branch_fc, dropout_ratio=self.dropout[0], name='fc_%d'%branch_layer_index)
                         branch_layer_index += 1
-                        branch_output = op.fc(branch_output, self.branch_fc, dropout_ratio=self.dropout, name='fc_%d'%branch_layer_index)
+                        branch_output = op.fc(branch_output, self.branch_fc, dropout_ratio=self.dropout[0], name='fc_%d'%branch_layer_index)
                         branch_layer_index += 1
-                        branch_output = op.fc(branch_output, len(self.num_output), dropout_ratio=self.dropout, name='fc_%d'%branch_layer_index)
+                        branch_output = op.fc(branch_output, len(self.num_output), dropout_ratio=self.dropout[0], name='fc_%d'%branch_layer_index)
                         branches.append(branch_output)
     
         return branches

@@ -24,12 +24,6 @@ class model():
         # List of 4 branch modules
         self.regression = modules.task_regression(regression_channel, image_fc, measurement_fc, command_fc, dropout) 
 
-        self.acc_weight = config.getfloat(model_name, 'acc_weight')
-        self.adversarial_hparam = config.getfloat(model_name, 'adversarial_hparam')
-        self.regression_hparam = config.getfloat(model_name, 'regression_hparam')
-        self.cyclic_hparam = config.getfloat(model_name, 'cyclic_hparam')
-        self.t2s_regression_hparam = config.getfloat(model_name, 't2s_regression')
-        
         self.summary = dict()
 
 
@@ -38,59 +32,63 @@ class model():
         with tf.name_scope('generator'):
             self.summary['source_image'] = source
             self.summary['target_image'] = target
-            if generator_type == 'DRN':
-                self.g_s2t = self.generator.generator_drn(source, name='G_S2T')
-                # [batch, height, width, 3]
-                self.summary['source_transferred'] = self.g_s2t                
-                self.g_t2s = self.generator.generator_drn(target, name='G_T2S')
-                self.summary['target_transferred'] = self.g_t2s
+            tf.logging.info('Use %s architecture' % self.generator_type)
+            try:
+                generator_func = getattr(self.generator, self.generator.module_name + '_' + self.generator_type.lower())
+            except:
+                raise AttributeError('%s not supproted' % self.generator_type)
 
-                self.s2t2s = self.generator.generator_drn(self.g_s2t, reuse=True, name='G_T2S')
-                self.summary['back2source'] = self.s2t2s
-                self.t2s2t = self.generator.generator_drn(self.g_t2s, reuse=True, name='G_S2T')
-                self.summary['back2target'] = self.t2s2t
-            elif generator_type == 'UNET':
-                self.g_s2t = self.generator.generator_unet(fake_image, name='G_S2T')
-                self.summary['source_transferred'] = self.g_s2t
-                self.g_t2s = self.generator.generator_unet(real_image, name='G_T2S')    
-                self.summary['target_transferred'] = self.g_t2s
+            self.g_s2t, self.source_noise = generator_func(source, name='G_S2T')
+            self.g_t2s, self.target_noise = generator_func(target, name='G_T2S')
+            self.s2t2s, _ = generator_func(self.g_s2t[:,:,:,:3], reuse=True, name='G_T2S')
+            self.t2s2t, _ = generator_func(self.g_t2s[:,:,:,:3], reuse=True, name='G_S2T')
 
-                self.s2t2s = self.generator.generator_unet(source, reuse=True, name='G_T2S')
-                self.summary['back2source'] = self.s2t2s
-                self.t2s2t = self.generator.generator_unet(target, reuse=True, name='G_S2T') 
-                self.summary['back2target'] = selef.t2s2t
-            else:
-                raise Exception('Not supported type')
+            self.summary['source_transferred'] = self.g_s2t[:,:,:,:3]                
+            self.summary['target_transferred'] = self.g_t2s[:,:,:,:3]
+            self.summary['back2source'] = self.s2t2s[:,:,:,:3]
+            self.summary['back2target'] = self.t2s2t[:,:,:,:3]
 
         with tf.name_scope('discriminator'):
             # Patch discriminator
-            self.s2t_fake = self.discriminator(self.g_s2t, name='D_S2T')
-            self.t2s_fake = self.discriminator(self.g_t2s, name='D_T2S')
+            self.s2t_fake = self.discriminator(self.g_s2t[:,:,:,:3], name='D_S2T')
+            self.t2s_fake = self.discriminator(self.g_t2s[:,:,:,:3], name='D_T2S')
 
             self.target_real = self.discriminator(target, reuse=True, name='D_S2T')
             self.source_real = self.discriminator(source, reuse=True, name='D_T2S')
 
         with tf.name_scope('regression'):
             self.end = self.regression(self.g_s2t, measurements)  
-            if self.args.t2s_regression:
+            if self.args.t2s_task:
                 self.t2s_end = self.regression(self.g_t2s, measurements, reuse=True)
 
+            if not self.args.training:
+                
+
     def create_objective(self, steer, acceleration, command):
-        self.command = command
         with tf.name_scope('cyclic'):
-            self.s2t_cyclic_loss = losses.cyclic_loss(self.summary['source_image'], self.s2t2s)
-            self.t2s_cyclic_loss = losses.cyclic_loss(self.summary['target_image'], self.t2s2t)
+            if self.generator_out_channel == 4:
+                self.s2t_cyclic_loss = losses.cyclic_loss(tf.concat([self.summary['source_image'], self.source_noise], 3), self.s2t2s)
+                self.t2s_cyclic_loss = losses.cyclic_loss(tf.concat([self.summary['target_image'], self.target_noise], 3), self.t2s2t)
+            else:
+                self.s2t_cyclic_loss = losses.cyclic_loss(self.summary['source_image'], self.s2t2s)
+                self.t2s_cyclic_loss = losses.cyclic_loss(self.summary['target_image'], self.t2s2t)
             self.summary['cyclic_loss'] = self.s2t_cyclic_loss + self.t2s_cyclic_loss
         
         # Wasserstein with gradient-penalty
         with tf.name_scope('adversarial'):
-            self.s2t_g_loss, self.s2t_d_loss = losses.adversarial_loss(self.target_real, self.s2t_fake, name='D_S2T', mode='WGP')
-            self.t2s_g_loss, self.t2s_d_loss = losses.adversarial_loss(self.source_real, self.t2s_fake, name='D_T2S', mode='WGP')
+            if mode == 'FISHER':
+                self.s2t_g_loss, self.s2t_d_loss, self.s2t_alpha = losses.adversarial_loss(self.summary['target_image'], self.g_s2t, self.target_real, self.s2t_fake, mode=mode, discriminator=self.discriminator, discriminator_name='D_S2T')
+                self.t2s_g_loss, self.t2s_d_loss, self.t2s_alpha = losses.adversarial_loss(self.summary['source_image'], self.g_t2s, self.source_real, self.t2s_fake, mode=mode, discriminator=self.discriminator, discriminator_name='D_T2S')
+            else:
+                self.s2t_g_loss, self.s2t_d_loss = losses.adversarial_loss(self.summary['target_image'], self.g_s2t, self.target_real, self.s2t_fake, mode=mode, discriminator=self.discriminator, discriminator_name='D_S2T')
+                self.t2s_g_loss, self.t2s_d_loss = losses.adversarial_loss(self.summary['source_image'], self.g_t2s, self.source_real, self.t2s_fake, mode=mode, discriminator=self.discriminator, discriminator_name='D_T2S')
+            self.summary['s2t_g_loss'] = self.s2t_g_loss
+            self.summary['t2s_g_loss'] = self.t2s_g_loss
             self.summary['s2t_d_loss'] = self.s2t_d_loss
             self.summary['t2s_d_loss'] = self.t2s_d_loss            
 
         with tf.name_scope('task'):
-            self.regression_loss = losses.task_regression_loss(steer, acceleration, command, self.end, self.acc_weight)
+            self.regression_loss = losses.task_regression_loss(steer, command, self.end)
             self.summary['regression_loss'] = self.regression_loss
             if self.t2s_task:
                 self.t2s_regression_loss = losses.task_regression_loss(steer, acceleration, command, self.t2s_end, self.acc_weight)

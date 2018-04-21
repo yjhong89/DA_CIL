@@ -13,7 +13,6 @@ class model():
         discriminator_channel = config.getint('discriminator', 'channel')
         generator_channel = config.getint('generator', 'channel')
         classifier_channel = config.getint('classifier', 'channel')
-        #   dropout = config.getfloat('classifier', 'dropout')
 
         self.generator_type = config.get('generator', 'type')
         self.generator_out_channel = config.getint('generator', 'out_channel')

@@ -94,7 +94,7 @@ def adversarial_loss(real_sample, fake_sample, real_logits, fake_logits, discrim
     
     return g_loss, d_loss
    
-def task_regression_loss(steer, acceleration, command, logits, acc_weight):
+def task_regression_loss(steer, command, logits):
     assert isinstance(logits, list)
 
     # steer, acc_x, acc_y, acc_z
@@ -102,8 +102,7 @@ def task_regression_loss(steer, acceleration, command, logits, acc_weight):
     regression_output_list = list()
     for branch in range(len(logits)):
         steer_output = tf.square(logits[branch][:,:1] - steer)
-        acc_output = acc_weight * tf.square(logits[branch][:,1:] - acceleration)
-        regression_output = tf.reduce_sum(tf.concat([steer_output, acc_output], axis=-1), axis=-1)
+        regression_output = tf.reduce_sum(steer_output, axis=-1)
         regression_output_list.append(regression_output)
         
     # [batch, 4]:, 4 represent 4 branch regression output
