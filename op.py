@@ -45,6 +45,31 @@ def _batch_norm(x, training=True, name='batch_norm', decay=0.99, epsilon=1e-5):
 def _leaky_relu(x, slope=0.2):
     return tf.maximum(x, 0.2*x)
 
+# From Attention U-NET
+def attention_gate(x, g, f_int, layer_index, name='attention', normalization=_instance_norm):
+    index = layer_index
+    with tf.name_scope(name):       
+        gate_feature = conv2d(g, out_channel=f_int, filter_size=1, stride=1, name='gate_%d'%index, activation=None, normalization=None, bias=False)
+        input_feature = conv2d(x, out_channel=f_int, filter_size=1, stride=1, name='input_%d'%index, activation=None, normalization=None, bias=True)
+        '''
+            gate_feature, input_feature has different dimension : Downsample to the resolution of gating signal
+            gate_feature: [batch size, h_g, w_g, f_int]
+            input_feature: [batch size, h_g*2, w_g*2, f_int]
+        '''
+        input_feature_downsampled = tf.image.resize_images(input_feature, gate_feature.get_shape().as_list()[1:3], method=tf.image.ResizeMethod.BILINEAR)
+        attention_signal = tf.nn.relu(gate_feature + input_feature_downsampled)
+        attention_signal = conv2d(attention_signal, out_channel=1, filter_size=1, stride=1, name='attention_%d'%index, activation=tf.nn.sigmoid, normalization=None, bias=True)
+        # Upsample to input 'x' shape
+        additive_attention = tf.image.resize_images(attention_signal, x.get_shape().as_list()[1:3], method=tf.image.ResizeMethod.BILINEAR)
+        
+        result = additive_attention * x
+
+        # Output transform
+        result = conv2d(result, out_channel=x.get_shape().as_list()[-1], filter_size=1, stride=1, name='output_transform_%d'%layer_index, activation=None, normalization=normalization, bias=False)
+
+    return result
+
+
 def residual_block(x, out_dim, layer_index, filter_size=3, stride=1, name='residual', normalization=_instance_norm, downsample=True, training=True):
     in_dim = x.get_shape().as_list()[-1]
     if in_dim == out_dim:
@@ -56,7 +81,7 @@ def residual_block(x, out_dim, layer_index, filter_size=3, stride=1, name='resid
         padding = int((filter_size - 1) / 2)
         if downsample:
             x = _max_pool(x)
-            y = tf.pad(x, [[0,0], [padding, padding], [padding, padding], 'REFLECT')
+            y = tf.pad(x, [[0,0], [padding, padding], [padding, padding], [0,0]], 'REFLECT')
             y = conv2d(y, out_channel=out_dim, filter_size=filter_size, stride=stride, name='conv2d_%d'%layer_index, activation=tf.nn.relu, padding='VALID', normalization=normalization, training=training)
             x = tf.pad(x, [[0,0],[0,0],[0,0],[in_dim//2,in_dim//2]], 'CONSTANT')
 
@@ -74,13 +99,14 @@ def residual_block(x, out_dim, layer_index, filter_size=3, stride=1, name='resid
 
     return x + y, index
 
-def fc(x, hidden, dropout_ratio=0.5, activation=tf.nn.relu, dropout=True, name='fc'):
+def fc(x, hidden, dropout_ratio=0.5, activation=tf.nn.relu, dropout=True, name='fc', bias=True):
     _, in_dim = x.get_shape().as_list()
     with tf.variable_scope(name):
         weight = tf.get_variable('weight', shape=[in_dim, hidden], initializer=tf.contrib.layers.xavier_initializer())
-        bias = tf.get_variable('bias', shape=[hidden], initializer=tf.constant_initializer(0))
         output = tf.matmul(x, weight)
-        output = output + bias
+        if bias:
+            bias = tf.get_variable('bias', shape=[hidden], initializer=tf.constant_initializer(0))
+            output = output + bias
 
         if dropout:
             output = tf.nn.dropout(output, dropout_ratio, name='dropout')
@@ -93,15 +119,18 @@ def global_average_pooling(x, name='global_pooling'):
     # Make fully connected layer
     return tf.reduce_mean(x, [1,2])
     
-def dilated_conv2d(x, out_channel, filter_size, dilation_rate, name='dilated_conv2d', activation=tf.nn.relu, normalization=_instance_norm, padding='VALID', training=True):
+def dilated_conv2d(x, out_channel, filter_size, dilation_rate, name='dilated_conv2d', activation=tf.nn.relu, normalization=_instance_norm, padding='VALID', training=True, bias=True):
     _, _, _, in_channel = x.get_shape().as_list()
     with tf.variable_scope(name):
         weight = tf.get_variable('weight', shape=[filter_size, filter_size, in_channel, out_channel], initializer=tf.contrib.layers.xavier_initializer())
-        bias = tf.get_variable('bias', shape=[out_channel], initializer=tf.constant_initializer(0))
                 
         rate = [dilation_rate, dilation_rate]
         # stride must be 1
-        output = tf.nn.convolution(x, weight, padding=padding, dilation_rate=rate) + bias
+        output = tf.nn.convolution(x, weight, padding=padding, dilation_rate=rate)
+
+        if bias:
+            bias = tf.get_variable('bias', shape=[out_channel], initializer=tf.constant_initializer(0))
+            output = output + bias
 
         if normalization:
             output = normalization(output)
@@ -113,15 +142,17 @@ def dilated_conv2d(x, out_channel, filter_size, dilation_rate, name='dilated_con
     return output      
 
 
-def conv2d(x, out_channel, filter_size=4, stride=2, name='conv2d', activation=_leaky_relu, normalization=_instance_norm, padding='SAME', training=True):
+def conv2d(x, out_channel, filter_size=4, stride=2, name='conv2d', activation=_leaky_relu, normalization=_instance_norm, padding='SAME', training=True, bias=True):
     _, _, _, in_channel = x.get_shape().as_list()
     with tf.variable_scope(name):
         weight = tf.get_variable('weight', shape=[filter_size, filter_size, in_channel, out_channel], initializer=tf.contrib.layers.xavier_initializer())
-        bias = tf.get_variable('bias', shape=[out_channel], initializer=tf.constant_initializer(0))
         # NHWC: batch, height, width, channel
         # padding VALID: no zero padding, only covers the valid input
         output = tf.nn.conv2d(x, weight, strides=[1, stride, stride, 1], padding=padding, data_format='NHWC', name='convolution')
-        output = output + bias
+        
+        if bias:
+            bias = tf.get_variable('bias', shape=[out_channel], initializer=tf.constant_initializer(0))
+            output = output + bias
 
         if normalization:
             output = normalization(output, training=training)

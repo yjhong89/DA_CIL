@@ -29,7 +29,7 @@ class generator(object):
 
     # Build model
     # From image-to-image translation
-    def generator_unet(self, x, name, reuse=False):
+    def generator_unet(self, x, name, att=True, reuse=False):
         layer_index = 0
         normalize_func = self.normalize()
         with tf.variable_scope(self.module_name):
@@ -45,21 +45,29 @@ class generator(object):
 
                 with tf.variable_scope('encoder'):
                     e1 = op.conv2d(x, out_channel=self.channel, name='conv2d_%d'%layer_index, normalization=False, activation=False)
+                    # 128,128
                     layer_index += 1
                     e2 = op.conv2d(tf.nn.relu(e1), out_channel=self.channel*2, name='conv2d_%d'%layer_index, activation=False, normalization=normalize_func)   
+                    # 64,64
                     layer_index += 1
                     e3 = op.conv2d(tf.nn.relu(e2), out_channel=self.channel*4, name='conv2d_%d'%layer_index, activation=False, normalization=normalize_func)
+                    # 32,32
                     layer_index += 1
                     e4 = op.conv2d(tf.nn.relu(e3), out_channel=self.channel*8, name='conv2d_%d'%layer_index, activation=False, normalization=normalize_func)
+                    # 16,16
                     layer_index += 1
                     e5 = op.conv2d(tf.nn.relu(e4), out_channel=self.channel*8, name='conv2d_%d'%layer_index, activation=False, normalization=normalize_func)
+                    # 8,8
                     layer_index += 1
                     e6 = op.conv2d(tf.nn.relu(e5), out_channel=self.channel*8, name='conv2d_%d'%layer_index, activation=False, normalization=normalize_func)
+                    # 4,4
                     layer_index += 1
                     e7 = op.conv2d(tf.nn.relu(e6), out_channel=self.channel*8, name='conv2d_%d'%layer_index, activation=False, normalization=normalize_func)
+                    # 2,2
                     layer_index += 1
                     # Middle point of total architecture(number of total layers=16)
                     e8 = op.conv2d(tf.nn.relu(e7), out_channel=self.channel*8, name='conv2d_%d'%layer_index, activation=False, normalization=normalize_func)
+                    # 1,1
                     layer_index += 1
                 
                 # U-Net architecture is with skip connections between each layer i in the encoer and layer n-i in the decoder. Concatenate activations in channel axis
@@ -67,29 +75,241 @@ class generator(object):
                 with tf.variable_scope('decoder'):
                     d1 = op.transpose_conv2d(tf.nn.relu(e8), out_channel=self.channel*8, name='transpose_conv2d_%d'%layer_index, activation=False, dropout=True, normalization=normalize_func)
                     d1 = tf.concat([d1, e7], axis=3)
+                    # 2,2
                     layer_index += 1
                     d2 = op.transpose_conv2d(tf.nn.relu(d1), out_channel=self.channel*8, name='transpose_conv2d_%d'%layer_index, activation=False, dropout=True, normalization=normalize_func)
                     d2 = tf.concat([d2, e6], axis=3)
+                    # 4,4
                     layer_index += 1
                     d3 = op.transpose_conv2d(tf.nn.relu(d2), out_channel=self.channel*8, name='transpose_conv2d_%d'%layer_index, activation=False, dropout=True, normalization=normalize_func)
                     d3 = tf.concat([d3, e5], axis=3)
+                    # 8,8
                     layer_index += 1
                     d4 = op.transpose_conv2d(tf.nn.relu(d3), out_channel=self.channel*8, name='transpose_conv2d_%d'%layer_index, activation=False, normalization=normalize_func)
                     d4 = tf.concat([d4, e4], axis=3)
+                    # 16,16
+                    layer_index += 1
+
+                    if att:
+                        d5 = op.transpose_conv2d(tf.nn.relu(d4), out_channel=self.channel*4, name='transpose_conv2d_%d'%layer_index, activation=False, normalization=normalize_func)
+                        e3 = op.attention_gate(e3, d5, self.channel*4, layer_index, normalization=normalize_func)
+                        print(d5.get_shape().as_list())
+                        d5 = tf.concat([d5, e3], axis=3)
+                        # 32,32
+                        layer_index += 1
+                        d6 = op.transpose_conv2d(tf.nn.relu(d5), out_channel=self.channel*2, name='transpose_conv2d_%d'%layer_index, activation=False, normalization=normalize_func)
+                        e2 = op.attention_gate(e2, d6, self.channel*2, layer_index, normalization=normalize_func)
+                        d6 = tf.concat([d6, e2], axis=3)
+                        # 64,64
+                        layer_index += 1
+                        d7 = op.transpose_conv2d(tf.nn.relu(d6), out_channel=self.channel, name='transpose_conv2d_%d'%layer_index, activation=False, normalization=normalize_func)
+                        e1 = op.attention_gate(e1, d7, self.channel, layer_index, normalization=normalize_func)
+                        d7 = tf.concat([d7, e1], axis=3)
+                        # 128,128
+                        layer_index += 1
+                        d8 = op.transpose_conv2d(tf.nn.relu(d7), out_channel=self.out_channel, name='transpose_conv2d_%d'%layer_index, normalization=False, activation=tf.nn.tanh)
+                        # 256,256
+
+                    else:
+                        d5 = op.transpose_conv2d(tf.nn.relu(d4), out_channel=self.channel*4, name='transpose_conv2d_%d'%layer_index, activation=False, normalization=normalize_func)
+                        d5 = tf.concat([d5, e3], axis=3)
+                        # 32,32
+                        layer_index += 1
+                        d6 = op.transpose_conv2d(tf.nn.relu(d5), out_channel=self.channel*2, name='transpose_conv2d_%d'%layer_index, activation=False, normalization=normalize_func)
+                        d6 = tf.concat([d6, e2], axis=3)
+                        # 64,64
+                        layer_index += 1
+                        d7 = op.transpose_conv2d(tf.nn.relu(d6), out_channel=self.channel, name='transpose_conv2d_%d'%layer_index, activation=False, normalization=normalize_func)
+                        d7 = tf.concat([d7, e1], axis=3)
+                        # 128,128
+                        layer_index += 1
+                        d8 = op.transpose_conv2d(tf.nn.relu(d7), out_channel=self.out_channel, name='transpose_conv2d_%d'%layer_index, normalization=False, activation=tf.nn.tanh)
+                    # 256,256
+
+        return d8, noise_channel
+
+    # Attention U-NET
+    def generator_attention_unet(self, x, name, reuse=False):
+        layer_index = 0
+        normalize_func = self.normalize()
+        with tf.variable_scope(self.module_name):
+            with tf.variable_scope(name + '_ATTENTION_UNET'):
+                if reuse:
+                    tf.get_variable_scope().reuse_variables()
+                
+                if self.latent_vars:
+                    noise_channel = project_latent_vars(shape=x.get_shape().as_list()[0:3]+[1],
+                                        latent_vars=self.latent_vars,
+                                        combine_method='concat', name=name)
+                    x = tf.concat([x, noise_channel], axis=3)
+
+                with tf.variable_scope('encoder'):
+                    e1 = op.conv2d(x, out_channel=self.channel, name='conv2d_%d'%layer_index, normalization=False, activation=False)
+                    # 128,128
+                    layer_index += 1
+                    e2 = op.conv2d(tf.nn.relu(e1), out_channel=self.channel*2, name='conv2d_%d'%layer_index, activation=False, normalization=normalize_func)   
+                    # 64,64
+                    layer_index += 1
+                    e3 = op.conv2d(tf.nn.relu(e2), out_channel=self.channel*4, name='conv2d_%d'%layer_index, activation=False, normalization=normalize_func)
+                    # 32,32
+                    layer_index += 1
+                    e4 = op.conv2d(tf.nn.relu(e3), out_channel=self.channel*8, name='conv2d_%d'%layer_index, activation=False, normalization=normalize_func)
+                    # 16,16
+                    layer_index += 1
+                    e5 = op.conv2d(tf.nn.relu(e4), out_channel=self.channel*8, name='conv2d_%d'%layer_index, activation=False, normalization=normalize_func)
+                    # 8,8
+                    layer_index += 1
+                    e6 = op.conv2d(tf.nn.relu(e5), out_channel=self.channel*8, name='conv2d_%d'%layer_index, activation=False, normalization=normalize_func)
+                    # 4,4
+                    layer_index += 1
+                    e7 = op.conv2d(tf.nn.relu(e6), out_channel=self.channel*8, name='conv2d_%d'%layer_index, activation=False, normalization=normalize_func)
+                    # 2,2
+                    layer_index += 1
+                    # Middle point of total architecture(number of total layers=16)
+                    e8 = op.conv2d(tf.nn.relu(e7), out_channel=self.channel*8, name='conv2d_%d'%layer_index, activation=False, normalization=normalize_func)
+                    # 1,1
+                    layer_index += 1
+                
+                # U-Net architecture is with skip connections between each layer i in the encoer and layer n-i in the decoder. Concatenate activations in channel axis
+                # Dropout with 0.5
+                with tf.variable_scope('decoder'):
+                    d1 = op.transpose_conv2d(tf.nn.relu(e8), out_channel=self.channel*8, name='transpose_conv2d_%d'%layer_index, activation=False, dropout=True, normalization=normalize_func)
+                    d1 = tf.concat([d1, e7], axis=3)
+                    # 2,2
+                    layer_index += 1
+                    d2 = op.transpose_conv2d(tf.nn.relu(d1), out_channel=self.channel*8, name='transpose_conv2d_%d'%layer_index, activation=False, dropout=True, normalization=normalize_func)
+                    d2 = tf.concat([d2, e6], axis=3)
+                    # 4,4
+                    layer_index += 1
+                    d3 = op.transpose_conv2d(tf.nn.relu(d2), out_channel=self.channel*8, name='transpose_conv2d_%d'%layer_index, activation=False, dropout=True, normalization=normalize_func)
+                    d3 = tf.concat([d3, e5], axis=3)
+                    # 8,8
+                    layer_index += 1
+                    d4 = op.transpose_conv2d(tf.nn.relu(d3), out_channel=self.channel*8, name='transpose_conv2d_%d'%layer_index, activation=False, normalization=normalize_func)
+                    d4 = tf.concat([d4, e4], axis=3)
+                    # 16,16
                     layer_index += 1
                     d5 = op.transpose_conv2d(tf.nn.relu(d4), out_channel=self.channel*4, name='transpose_conv2d_%d'%layer_index, activation=False, normalization=normalize_func)
-                    d5 = tf.concat([d5, e3], axis=3)
+                    d5 = tf.concat([d5, attention_5], axis=3)
+                    # 32,32
                     layer_index += 1
                     d6 = op.transpose_conv2d(tf.nn.relu(d5), out_channel=self.channel*2, name='transpose_conv2d_%d'%layer_index, activation=False, normalization=normalize_func)
                     d6 = tf.concat([d6, e2], axis=3)
+                    # 64,64
                     layer_index += 1
                     d7 = op.transpose_conv2d(tf.nn.relu(d6), out_channel=self.channel, name='transpose_conv2d_%d'%layer_index, activation=False, normalization=normalize_func)
                     d7 = tf.concat([d7, e1], axis=3)
+                    # 128,128
                     layer_index += 1
                     d8 = op.transpose_conv2d(tf.nn.relu(d7), out_channel=self.out_channel, name='transpose_conv2d_%d'%layer_index, normalization=False, activation=tf.nn.tanh)
+                    # 256,256
                 
         return d8, noise_channel
 
+    # Dilated Residual Networks
+    def generator_drn(self, x, name, reuse=False):
+        layer_index = 0
+        residual_index = 0
+        normalize_func = self.normalize()
+        with tf.variable_scope(self.module_name):
+            with tf.variable_scope(name+'_DRN'):
+                    
+                    d5 = op.transpose_conv2d(tf.nn.relu(d4), out_channel=self.channel*4, name='transpose_conv2d_%d'%layer_index, activation=False, normalization=normalize_func)
+                    d5 = tf.concat([d5, e3], axis=3)
+                    # 32,32
+                    layer_index += 1
+                    d6 = op.transpose_conv2d(tf.nn.relu(d5), out_channel=self.channel*2, name='transpose_conv2d_%d'%layer_index, activation=False, normalization=normalize_func)
+                    d6 = tf.concat([d6, e2], axis=3)
+                    # 64,64
+                    layer_index += 1
+                    d7 = op.transpose_conv2d(tf.nn.relu(d6), out_channel=self.channel, name='transpose_conv2d_%d'%layer_index, activation=False, normalization=normalize_func)
+                    d7 = tf.concat([d7, e1], axis=3)
+                    # 128,128
+                    layer_index += 1
+                    d8 = op.transpose_conv2d(tf.nn.relu(d7), out_channel=self.out_channel, name='transpose_conv2d_%d'%layer_index, normalization=False, activation=tf.nn.tanh)
+                    # 256,256
+
+                    
+                
+        return d8, noise_channel
+
+    # Attention U-NET
+    def generator_attention_unet(self, x, name, reuse=False):
+        layer_index = 0
+        normalize_func = self.normalize()
+        with tf.variable_scope(self.module_name):
+            with tf.variable_scope(name + '_ATTENTION_UNET'):
+                if reuse:
+                    tf.get_variable_scope().reuse_variables()
+                
+                if self.latent_vars:
+                    noise_channel = project_latent_vars(shape=x.get_shape().as_list()[0:3]+[1],
+                                        latent_vars=self.latent_vars,
+                                        combine_method='concat', name=name)
+                    x = tf.concat([x, noise_channel], axis=3)
+
+                with tf.variable_scope('encoder'):
+                    e1 = op.conv2d(x, out_channel=self.channel, name='conv2d_%d'%layer_index, normalization=False, activation=False)
+                    # 128,128
+                    layer_index += 1
+                    e2 = op.conv2d(tf.nn.relu(e1), out_channel=self.channel*2, name='conv2d_%d'%layer_index, activation=False, normalization=normalize_func)   
+                    # 64,64
+                    layer_index += 1
+                    e3 = op.conv2d(tf.nn.relu(e2), out_channel=self.channel*4, name='conv2d_%d'%layer_index, activation=False, normalization=normalize_func)
+                    # 32,32
+                    layer_index += 1
+                    e4 = op.conv2d(tf.nn.relu(e3), out_channel=self.channel*8, name='conv2d_%d'%layer_index, activation=False, normalization=normalize_func)
+                    # 16,16
+                    layer_index += 1
+                    e5 = op.conv2d(tf.nn.relu(e4), out_channel=self.channel*8, name='conv2d_%d'%layer_index, activation=False, normalization=normalize_func)
+                    # 8,8
+                    layer_index += 1
+                    e6 = op.conv2d(tf.nn.relu(e5), out_channel=self.channel*8, name='conv2d_%d'%layer_index, activation=False, normalization=normalize_func)
+                    # 4,4
+                    layer_index += 1
+                    e7 = op.conv2d(tf.nn.relu(e6), out_channel=self.channel*8, name='conv2d_%d'%layer_index, activation=False, normalization=normalize_func)
+                    # 2,2
+                    layer_index += 1
+                    # Middle point of total architecture(number of total layers=16)
+                    e8 = op.conv2d(tf.nn.relu(e7), out_channel=self.channel*8, name='conv2d_%d'%layer_index, activation=False, normalization=normalize_func)
+                    # 1,1
+                    layer_index += 1
+                
+                # U-Net architecture is with skip connections between each layer i in the encoer and layer n-i in the decoder. Concatenate activations in channel axis
+                # Dropout with 0.5
+                with tf.variable_scope('decoder'):
+                    d1 = op.transpose_conv2d(tf.nn.relu(e8), out_channel=self.channel*8, name='transpose_conv2d_%d'%layer_index, activation=False, dropout=True, normalization=normalize_func)
+                    d1 = tf.concat([d1, e7], axis=3)
+                    # 2,2
+                    layer_index += 1
+                    d2 = op.transpose_conv2d(tf.nn.relu(d1), out_channel=self.channel*8, name='transpose_conv2d_%d'%layer_index, activation=False, dropout=True, normalization=normalize_func)
+                    d2 = tf.concat([d2, e6], axis=3)
+                    # 4,4
+                    layer_index += 1
+                    d3 = op.transpose_conv2d(tf.nn.relu(d2), out_channel=self.channel*8, name='transpose_conv2d_%d'%layer_index, activation=False, dropout=True, normalization=normalize_func)
+                    d3 = tf.concat([d3, e5], axis=3)
+                    # 8,8
+                    layer_index += 1
+                    d4 = op.transpose_conv2d(tf.nn.relu(d3), out_channel=self.channel*8, name='transpose_conv2d_%d'%layer_index, activation=False, normalization=normalize_func)
+                    d4 = tf.concat([d4, e4], axis=3)
+                    # 16,16
+                    layer_index += 1
+                    d5 = op.transpose_conv2d(tf.nn.relu(d4), out_channel=self.channel*4, name='transpose_conv2d_%d'%layer_index, activation=False, normalization=normalize_func)
+                    d5 = tf.concat([d5, attention_5], axis=3)
+                    # 32,32
+                    layer_index += 1
+                    d6 = op.transpose_conv2d(tf.nn.relu(d5), out_channel=self.channel*2, name='transpose_conv2d_%d'%layer_index, activation=False, normalization=normalize_func)
+                    d6 = tf.concat([d6, e2], axis=3)
+                    # 64,64
+                    layer_index += 1
+                    d7 = op.transpose_conv2d(tf.nn.relu(d6), out_channel=self.channel, name='transpose_conv2d_%d'%layer_index, activation=False, normalization=normalize_func)
+                    d7 = tf.concat([d7, e1], axis=3)
+                    # 128,128
+                    layer_index += 1
+                    d8 = op.transpose_conv2d(tf.nn.relu(d7), out_channel=self.out_channel, name='transpose_conv2d_%d'%layer_index, normalization=False, activation=tf.nn.tanh)
+                    # 256,256
+                
+        return d8, noise_channel
 
     # Dilated Residual Networks
     def generator_drn(self, x, name, reuse=False):
@@ -340,18 +560,18 @@ class task_regression(object):
                 with tf.variable_scope('image_module'):
                     if mode == 'RESNET':
                         with tf.variable_scope(private, reuse_private):
-                            x = op.conv2d(image, out_channel=self.channel, filter_size=7, stride=2, normalization=op._batch_norm, activation=tf.nn.relu, name='conv2d_%d'image_layer_index)
+                            x = op.conv2d(image, out_channel=self.channel, filter_size=7, stride=2, normalization=op._batch_norm, activation=tf.nn.relu, name='conv2d_%d'%image_layer_index)
                         image_layer_index += 1
     
                         with tf.variable_scope(shared, reuse_shared):
-                            x, image_layer_index = residual_block(x, out_channel=self.channel, image_layer_index, normalization=op._batch_norm, downsample=False, training=self.training)
-                            x, image_layer_index = residual_block(x, out_channel=self.channel, image_layer_index, normalization=op._batch_norm, downsample=False, training=self.training)
-                            x, image_layer_index = residual_block(x, out_channel=self.channel*2, image_layer_index, normalization=op._batch_norm, downsample=True, training=self.training)
-                            x, image_layer_index = residual_block(x, out_channel=self.channel*2, image_layer_index, normalization=op._batch_norm, downsample=False, training=self.training)
-                            x, image_layer_index = residual_block(x, out_channel=self.channel*4, image_layer_index, normalization=op._batch_norm, downsample=True, training=self.training)
-                            x, image_layer_index = residual_block(x, out_channel=self.channel*4, image_layer_index, normalization=op._batch_norm, downsample=False, training=self.training)
-                            x, image_layer_index = residual_block(x, out_channel=self.channel*8, image_layer_index, normalization=op._batch_norm, downsample=True, training=self.training)
-                            x, image_layer_index = residual_block(x, out_channel=self.channel*8, image_layer_index, normalization=op._batch_norm, downsample=False, training=self.training)
+                            x, image_layer_index = residual_block(x, out_channel=self.channel, layer_index=image_layer_index, normalization=op._batch_norm, downsample=False, training=self.training)
+                            x, image_layer_index = residual_block(x, out_channel=self.channel, layer_index=image_layer_index, normalization=op._batch_norm, downsample=False, training=self.training)
+                            x, image_layer_index = residual_block(x, out_channel=self.channel*2, layer_index=image_layer_index, normalization=op._batch_norm, downsample=True, training=self.training)
+                            x, image_layer_index = residual_block(x, out_channel=self.channel*2, layer_index=image_layer_index, normalization=op._batch_norm, downsample=False, training=self.training)
+                            x, image_layer_index = residual_block(x, out_channel=self.channel*4, layer_index=image_layer_index, normalization=op._batch_norm, downsample=True, training=self.training)
+                            x, image_layer_index = residual_block(x, out_channel=self.channel*4, layer_index=image_layer_index, normalization=op._batch_norm, downsample=False, training=self.training)
+                            x, image_layer_index = residual_block(x, out_channel=self.channel*8, layer_index=image_layer_index, normalization=op._batch_norm, downsample=True, training=self.training)
+                            x, image_layer_index = residual_block(x, out_channel=self.channel*8, layer_index=image_layer_index, normalization=op._batch_norm, downsample=False, training=self.training)
                
                     else:
                         with tf.variable_scope(private, reuse_private):

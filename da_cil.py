@@ -61,7 +61,7 @@ class model():
             if self.args.t2s_task:
                 self.t2s_end = self.regression(self.g_t2s, measurements, reuse=True)
 
-            if not self.args.training:
+            #if not self.args.training:
                 
 
     def create_objective(self, steer, acceleration, command):

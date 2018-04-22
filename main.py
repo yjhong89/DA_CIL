@@ -15,7 +15,7 @@ def main():
     parser.add_argument('-d', '--delete', action='store_true')
     parser.add_argument('-l', '--log', action='store_true')
     parser.add_argument('--config', default='config.ini')
-    parser.add_argument('--batch_size', type=int, default=8)
+    parser.add_argument('--batch_size', type=int, default=4)
     parser.add_argument('--clip_norm', type=float, default=5.0)
     parser.add_argument('--optimizer', type=str, default='rms')
     parser.add_argument('--training', type=utils.str2bool, default='t')
