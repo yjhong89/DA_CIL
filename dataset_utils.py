@@ -140,7 +140,7 @@ def load_data(tfrecord_dir, whether_for_source, data_type, config):
             tfrecord_path = [tfrecord_path]
 
         num_examples = sum(sum(1 for _ in tf.python_io.tf_record_iterator(path)) for path in tfrecord_path)
-        tf.logging.info(' %d examples' % num_examples)
+        tf.logging.info('%d examples' % num_examples)
 
         file_queue = tf.train.string_input_producer(tfrecord_path)
         reader = tf.TFRecordReader()
