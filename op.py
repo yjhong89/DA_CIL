@@ -73,9 +73,9 @@ def attention_gate(x, g, f_int, layer_index, name='attention', normalization=_in
 def residual_block(x, out_dim, layer_index, filter_size=3, stride=1, name='residual', normalization=_instance_norm, downsample=True, training=True):
     in_dim = x.get_shape().as_list()[-1]
     if in_dim == out_dim:
-        increase_dim = True
-    else:
         increase_dim = False
+    else:
+        increase_dim = True
 
     with tf.name_scope(name):
         padding = int((filter_size - 1) / 2)

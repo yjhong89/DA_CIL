@@ -7,6 +7,17 @@ import numpy as np
 import sys
 import tensorflow.contrib.slim as slim
 
+_SOURCE_SPLITS_TO_SIZES = {'train': 67644, 'valid': 747, 'test': 6759}
+_SOURCE_IMAGE_SIZE = [360,640,4]
+_SOURCE_ITEMS_TO_DESCRIPTIONS = {
+            'image': 'A [360x640x1] RGB image.',
+            'label': 'A single integer between 0 and 8' }
+_TARGET_SPLITS_TO_SIZES = {'train': 21870, 'valid': 2187, 'test': 2430}
+_TARGET_IMAGE_SIZE = [180, 320, 3]
+_TARGET_ITEMS_TO_DESCRIPTIONS = {
+            'image': 'A [180x320x3]',
+            'label': 'A single integer between 0 and 8'}
+
 def tfrecord_path(tfrecord_dir, whether_for_source, data_type): 
     if whether_for_source:
         return os.path.join(tfrecord_dir, 'source_' + data_type + '.tfrecord')
@@ -50,25 +61,6 @@ def process_h5file(data_path, writer):
     sys.stdout.write('\n')
     # Flush the buffer, write everything in the buffer to the terminal
     sys.stdout.flush()
-
-#def _check_max(steer, acceleration, speed, orientation):
-#    max_steer = 0
-#    max_speed = 0
-#    # x,y,z
-#    max_acc = [0]*3
-#    max_orientation = [0]*3
-#
-#    if max_steer < abs(steer):
-#        max_steer = abs(steer)
-#    if max_speed < abs(speed):
-#        max_speed = abs(speed)
-#    for n, i in enumerate(zip(max_acc, max_orientation)):
-#        if i[0] < abs(acceleration[n]):
-#            max_acc[n] = abs(acceleration[n])
-#        if i[1] < abs(orientation[n]):
-#            max_orientation[n] = abs(orientation[n])
-#
-#    return max_steer, max_acc, max_speed, max_orientation
 
 
 def _get_stats(label_info):
@@ -121,57 +113,6 @@ def _float_features(value):
         value = [value]
     return tf.train.Feature(float_list=tf.train.FloatList(value=value))
 
-# Read data from tfrecord file
-def load_data(tfrecord_dir, whether_for_source, data_type, config):
-    tfrecord_path = tfrecord_path(tfrecord_dir, whether_for_source, data_type)
-    with tf.name_scope('read_tfrecord'):
-        if not isinstance(tfrecord_path, (tuple, list)):
-            tfrecord_path = [tfrecord_path]
-
-        num_examples = sum(sum(1 for _ in tf.python_io.tf_record_iterator(path)) for path in tfrecord_path)
-        tf.logging.info('%d examples' % num_examples)
-
-        file_queue = tf.train.string_input_producer(tfrecord_path)
-        reader = tf.TFRecordReader()
-        _, serialzied_example = reader.read(file_queue)
-
-        keys_to_features = {
-            'rgb_data': tf.FixedLenFeature([], tf.string),
-            'label/steer': tf.FixedLenFeature([1], tf.float32),
-            'label/acc': tf.FixedLenFeature([3], tf.float32),
-            'measures/speed': tf.FixedLenFeature([1], tf.float32),
-            'measures/orientation': tf.FixedLenFeature([3], tf.float32),
-            'measures/traffic_rule': tf.FixedLenFeature([2], tf.float32),
-            'command': tf.FixedLenFeature([1], tf.int64)}
-
-        example = tf.parse_single_example(serialized_example, features=keys_to_features)
-
-    with tf.name_scope('decode'):
-        # only tf.string need tf.decode_raw
-        image = tf.decode_raw(example['rgb_data'], tf.float32, name='image')
-        steer = tf.cast(example['label/steer'], tf.float32, name='steer')
-        acc = tf.cast(example['label/acc'], tf.float32, name='acc')
-        speed = tf.cast(example['measures/speed'], tf.float32, name='speed')
-        orientation = tf.cast(example['measures/orientation'], tf.float32, name='orientation')
-        traffic_rule = tf.cast(example['measures/traffic_rule'], tf.float32, name='traffic_rule')
-        command = tf.decode_raw(example['command'], tf.int64, name='command')
-       
-    if config.getboolean('model', 'augmentation'):
-        image = _augmentation(image, config)
-
-    image = tf.clip_by_value(image, 0, 255.0)
-
-    # Normalize with the maximum value
-    normalized_steer, normalized_acc, normalized_speed = tf.py_func(stats_normalize, [steer, acc, speed], [tf.float32]*3)
-
-    with tf.name_scope('reshape_stats'):
-        normalized_steer = tf.reshape(normalized_steer, [1])
-        normalized_speed = tf.reshape(normalized_speed, [1])
-        normalized_acc = tf.reshape(normalized_acc, [3])
-
-    labels = (normalized_steer, normalized_acc, normalized_speed)
-
-    return image, labels, command
 
 # Image value: float type [0,1]
 def _augmentation(image, config):
@@ -215,16 +156,6 @@ def _augmentation(image, config):
 
     return image
 
-_SOURCE_SPLITS_TO_SIZES = {'train': 67644, 'valid': 747, 'test': 6759}
-_SOURCE_IMAGE_SIZE = [360,640,4]
-_SOURCE_ITEMS_TO_DESCRIPTIONS = {
-            'image': 'A [360x640x1] RGB image.',
-            'label': 'A single integer between 0 and 8' }
-_TARGET_SPLITS_TO_SIZES = {'train': 21870, 'valid': 2187, 'test': 2430}
-_TARGET_IMAGE_SIZE = [180, 320, 3]
-_TARGET_ITEMS_TO_DESCRIPTIONS = {
-            'image': 'A [180x320x3]',
-            'label': 'A single integer between 0 and 8'}
 
 def get_batches_pixel_da(dataset_name, split_name, tfrecord_dir, batch_size, config=None):
     tfrecord_path = os.path.join(os.getcwd(), tfrecord_dir, '%s_%s.tfrecord' % (dataset_name, split_name))
@@ -269,8 +200,7 @@ def get_batches_pixel_da(dataset_name, split_name, tfrecord_dir, batch_size, con
         # currently, image dtype: uint8
         [image, label] = provider.get(['image', 'label'])
         
-        # Images that are represented using floating point values are expected to have values in the range [0,1)
-        # convert_image_dtype converts data type and scaling values
+        # Just convert image data type
         image = tf.image.convert_image_dtype(image, tf.float32)
 
         if config.getboolean('config', 'augmentation'):
@@ -358,12 +288,20 @@ def get_batches(dataset_name, split_name, tfrecord_dir, batch_size, config=None)
     liny  = features['measures/linacc_y']
     command = tf.decode_raw(features['command'],tf.float32)
 
-    print('==')
+    print('='*10)
     command = tf.reshape(command,[3])
     image = tf.reshape(image,[240,360,3])
-    #label = tf.reshape(label,[1])
 
-    #images, labels, angzs, linxs, linys = tf.train.shuffle_batch([image,label,angz,linx,liny],batch_size=batch_size, capacity=30, num_threads=4, min_after_dequeue=10)
+    image /= 255.0
+    image = tf.image.convert_image_dtype(image, tf.float32)
+
+    if config.getboolean('config', 'augmentation'):
+        image = _augmentation(image, config)
+
+    image = tf.clip_by_value(image, 0, 1.0)
+    image -= 0.5
+    image *= 2
+
     images, labels, angzs, linxs, linys, commands = tf.train.shuffle_batch([image,label,angz,linx,liny,command],batch_size=batch_size, capacity=30, num_threads=4, min_after_dequeue=10)
 
     angzs = tf.expand_dims(angzs, 1)
@@ -411,9 +349,12 @@ def check_tfrecord(dataset_name, split_name, tfrecord_dir):
 
 if __name__ == "__main__":
 
+    config = utils.MyConfigParser()
+    utils.load_config()
+
     with tf.Session() as sess:
 
-        a, b, c = get_batches('source', 'train', 'pixel_da', 1)
+        a, b, c, d = get_batches('source', 'train', 'pixel_da', 1, config)
         #check_tfrecord('target', 'train', 'pixel_da')
         sess.run(tf.group(tf.global_variables_initializer(), tf.local_variables_initializer()))
         coord = tf.train.Coordinator()

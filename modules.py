@@ -537,9 +537,9 @@ class task_regression(object):
         self.num_command = 4
         self.training = training    
         if self.training:
-            self.dropout = [1.0] * 2
-        else:
             self.dropout = [0.5, 0.2]
+        else:
+            self.dropout = [1.0] * 2
 
     
         # To optimize jointly with disicriminator since task regression and disicriminator are not related
