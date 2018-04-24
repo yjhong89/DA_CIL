@@ -49,7 +49,10 @@ def str2bool(v):
     else:
         raise ValueError('%s is not supported' % v)
 
-def summarize(summary_set, t2s_option):
+def summarize(summary_set, t2s_option, source_only=False):
+    if source_only:
+        task_loss_summary = tf.summary.scalar('task_loss', summary_set['regression_loss'])
+        return tf.summary.merge([task_loss_summary])
     # Loss part
     cyclic_summary = tf.summary.scalar('cyclic_loss', summary_set['cyclic_loss'])
     s2t_g_loss_summary = tf.summary.scalar('s2t_g_loss', summary_set['s2t_g_loss'])

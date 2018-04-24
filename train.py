@@ -35,7 +35,7 @@ def _get_trainable_vars(scope):
 def _gradient_clip(name, optimizer, loss, global_steps=None, clip_norm=5.0):
     var_list = _get_trainable_vars(name)
     grds, var = zip(*optimizer.compute_gradients(loss, var_list=var_list))
-    gradients = [gradient if gradient is None else tf.clip_by_value(gradient, -5.0, 5.0) for gradient in grds]
+    gradients = [gradient if gradient is None else tf.clip_by_value(gradient, -clip_norm, clip_norm) for gradient in grds]
     if global_steps is not None:
         optim = optimizer.apply_gradients(zip(gradients, var), global_step=global_steps)
     else:
@@ -50,6 +50,7 @@ def train(sess, args, config):
     adversarial_mode = config.get('config', 'mode')
     whether_noise = config.getboolean('generator', 'noise')
     noise_dim = config.getint('generator', 'noise_dim')
+    source_only = config.getboolean('config', 'source_only')
 
     s2t_adversarial_weight = config.getfloat(model_type, 's2t_adversarial_weight')
     t2s_adversarial_weight = config.getfloat(model_type, 't2s_adversarial_weight')
@@ -65,8 +66,6 @@ def train(sess, args, config):
         shutil.rmtree(save_dir)
 	
     os.makedirs(save_dir, exist_ok=True)
-    #if not os.path.exists(log_dir):
-        #os.mkdir(log_dir)
 
     model_path = importlib.import_module(model_type)
     model = getattr(model_path, 'model')
@@ -76,20 +75,24 @@ def train(sess, args, config):
     writer = tf.summary.FileWriter(save_dir, sess.graph)
     global_step = tf.train.get_or_create_global_step()
 
+    get_batches = getattr(dataset_utils, model_type)
+
     if model_type == 'da_cil':
         with tf.name_scope(model_type + '_batches'):
-            source_image_batch, source_label_batch, source_command_batch = dataset_factory.get_batches(tfrecord_dir, whether_for_source=True, data_type=args.data_type, config=config)
-            target_image_batch, _, _ = dataset_factpry.get_batches(tfrecord_dir, whether_for_source=False, data_type=args.data_type, config=config)
+            source_image_batch, source_label_batch, source_measure_batch, source_command_batch = get_batches('source', 'train', tfrecord_dir, 2, config=config)
+            #target_image_batch, _, _ = dataset_factpry.get_batches(tfrecord_dir, whether_for_source=False, data_type=args.data_type, config=config)
     
-        da_model(source_image_batch, target_image_batch, source_label_batch[2])
+        da_model(source_image_batch, None, source_measure_batch)
        
-        with tf.name_scope(model_path + '_objectives'):
-            da_model.create_objective(source_label_batch[0], source_label_batch[1])
+        with tf.name_scope(model_type + '_objectives'):
+            da_model.create_objective(source_label_batch, source_command_batch)
+            discriminator_loss = da_model.regression_loss
+            da_model.summary['discriminator_loss'] = discriminator_loss
 
     elif model_type == 'pixel_da':
         tf.logging.info('Training %s' % model_type)
         with tf.name_scope(model_type + '_batches'):
-            source_image_batch, source_label_batch = dataset_utils.get_batches('source', 'train', tfrecord_dir, batch_size=args.batch_size, config=config)
+            source_image_batch, source_label_batch = get_batches('source', 'train', tfrecord_dir, batch_size=args.batch_size, config=config)
             mask_image_batch = source_image_batch[:,:,:,3]
             source_image_batch = source_image_batch[:,:,:,:3]
             if config.getboolean('config', 'input_mask'):
@@ -128,13 +131,17 @@ def train(sess, args, config):
         else:
             learning_rate = args.learning_rate
 
-        g_optimizer = _get_optimizer(config, args.optimizer)(learning_rate)
+        if not source_only:
+            g_optimizer = _get_optimizer(config, args.optimizer)(learning_rate)
+            g_optim = _gradient_clip(name='generator', optimizer=g_optimizer, loss=generator_loss, global_steps=global_step, clip_norm=args.clip_norm)
         d_optimizer = _get_optimizer(config, args.optimizer)(learning_rate)
-        g_optim = _gradient_clip(name='generator', optimizer=g_optimizer, loss=generator_loss, global_steps=global_step, clip_norm=args.clip_norm)
         d_optim = _gradient_clip(name='discriminator', optimizer=d_optimizer, loss=discriminator_loss, global_steps=global_step, clip_norm=args.clip_norm)
        
-    generator_summary, discriminator_summary = utils.summarize(da_model.summary, args.t2s_task) 
-    utils.config_summary(save_dir, s2t_adversarial_weight, t2s_adversarial_weight, s2t_cyclic_weight, t2s_cyclic_weight, s2t_task_weight, t2s_task_weight, discriminator_step, generator_step, adversarial_mode, whether_noise, noise_dim)
+    if not source_only:
+        generator_summary, discriminator_summary = utils.summarize(da_model.summary, args.t2s_task) 
+        utils.config_summary(save_dir, s2t_adversarial_weight, t2s_adversarial_weight, s2t_cyclic_weight, t2s_cyclic_weight, s2t_task_weight, t2s_task_weight, discriminator_step, generator_step, adversarial_mode, whether_noise, noise_dim)
+    else:
+        discriminator_summary = utils.summarize(da_model.summary, args.t2s_task, source_only)
 
 
     saver = tf.train.Saver(max_to_keep=5)
@@ -153,24 +160,29 @@ def train(sess, args, config):
             # Update discriminator
             for disc_iter in range(discriminator_step):
                 d_loss, _, steps = sess.run([discriminator_loss, d_optim, global_step])
-                if adversarial_mode == 'FISHER':
+                if not source_only and adversarial_mode == 'FISHER':
                     _, _ = sess.run([da_model.s2t_alpha, da_model.t2s_alpha])
                 #writer.add_summary(disc_sum, steps)
                 tf.logging.info('Step %d: Discriminator loss=%.5f', steps, d_loss)
 
-            for gen_iter in range(generator_step):
-                g_loss, _, steps = sess.run([generator_loss, g_optim, global_step])
-                #writer.add_summary(gen_sum, steps)
-                tf.logging.info('Step %d: Generator loss=%.5f', steps, g_loss)
+            if not source_only:
+                for gen_iter in range(generator_step):
+                    g_loss, _, steps = sess.run([generator_loss, g_optim, global_step])
+                    #writer.add_summary(gen_sum, steps)
+                    tf.logging.info('Step %d: Generator loss=%.5f', steps, g_loss)
             
             if (iter_count+1) % args.save_interval == 0:
                 saver.save(sess, os.path.join(save_dir, model_type), global_step=(iter_count+1))
                 tf.logging.info('Checkpoint save')
 
             if (iter_count+1) % args.summary_interval == 0:
-                disc_sum, gen_sum = sess.run([discriminator_summary, generator_summary])
+                if not source_only:
+                    disc_sum, gen_sum = sess.run([discriminator_summary, generator_summary])
+                    writer.add_summary(gen_sum, steps)
+                else:
+                    disc_sum = sess.run(discriminator_summary)
+                    
                 writer.add_summary(disc_sum, steps)
-                writer.add_summary(gen_sum, steps)
                 tf.logging.info('Summary at %d step' % (iter_count+1))
 
         

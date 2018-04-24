@@ -157,7 +157,7 @@ def _augmentation(image, config):
     return image
 
 
-def get_batches_pixel_da(dataset_name, split_name, tfrecord_dir, batch_size, config=None):
+def pixel_da(dataset_name, split_name, tfrecord_dir, batch_size, config=None):
     tfrecord_path = os.path.join(os.getcwd(), tfrecord_dir, '%s_%s.tfrecord' % (dataset_name, split_name))
     if not isinstance(tfrecord_path, (tuple, list)):
         tfrecord_path = [tfrecord_path]
@@ -229,36 +229,10 @@ def get_batches_pixel_da(dataset_name, split_name, tfrecord_dir, batch_size, con
         label_batch = slim.one_hot_encoding(label_batch, 9)
         label_batch = tf.reshape(label_batch, [-1, 9])
          
-        
-#        example = tf.parse_single_example(serialized_example, features=keys_to_features)
-#
-#
-#    with tf.name_scope('decode'):
-#        image = tf.decode_raw(example['image/encoded'], tf.float32)
-#        label = tf.cast(example['image/class/label'], tf.int64)
-#
-#        # Reshape image to original shape
-#        # source image include mask in channel 4
-#        if dataset_name == 'source':
-#            image = tf.reshape(image, (360, 640, 4)) 
-#        elif dataset_name == 'target':
-#            image = tf.reshape(image, (90, 160, 3))
-#
-#        # per_sample_normalization
-#        image = tf.image.per_image_standardization(image)
-#        image_batch, label_batch = tf.train.shuffle_batch([image, label], batch_size=batch_size, 
-#                capacity=batch_size*5, num_threads=10, min_after_dequeue=10)
-#
-#        image_batch = tf.image.resize_images(image_batch, [360, 640])
-#        
-#        # [batch, 1] -> [batch size, 1, 9]
-#        label_batch = slim.one_hot_encoding(label_batch, 9)
-#        label_batch = tf.reshape(label_batch, [-1, 9])
-
     return image_batch, label_batch
 
 
-def get_batches(dataset_name, split_name, tfrecord_dir, batch_size, config=None):
+def da_cil(dataset_name, split_name, tfrecord_dir, batch_size, config=None):
     tfrecord_path = os.path.join(os.getcwd(), tfrecord_dir, '%s_%s.tfrecord' % (dataset_name, split_name))
     if not isinstance(tfrecord_path, (tuple, list)):
         tfrecord_path = [tfrecord_path]
@@ -345,8 +319,6 @@ def check_tfrecord(dataset_name, split_name, tfrecord_dir):
         # Convert image string to numpy, unsigned integer
         img = np.fromstring(img_string, np.uint8).astype(np.float32)
 
-
-
 if __name__ == "__main__":
 
     config = utils.MyConfigParser()
@@ -354,7 +326,7 @@ if __name__ == "__main__":
 
     with tf.Session() as sess:
 
-        a, b, c, d = get_batches('source', 'train', 'pixel_da', 1, config)
+        a, b, c, d = da_cil('source', 'train', 'pixel_da', 1, config)
         #check_tfrecord('target', 'train', 'pixel_da')
         sess.run(tf.group(tf.global_variables_initializer(), tf.local_variables_initializer()))
         coord = tf.train.Coordinator()

@@ -91,13 +91,13 @@ def residual_block(x, out_dim, layer_index, filter_size=3, stride=1, name='resid
             
             y = tf.pad(x, [[0,0],[padding, padding], [padding,padding],[0,0]], 'REFLECT')
             y = conv2d(y, out_channel=out_dim, filter_size=filter_size, stride=stride, name='conv2d_%d'%layer_index, activation=tf.nn.relu, padding='VALID', normalization=normalization, training=training)
-            index = layer_index + 1
+        layer_index += 1
 
         y = tf.pad(y, [[0,0],[padding, padding], [padding,padding],[0,0]], 'REFLECT')
-        y = conv2d(y, out_channel=out_dim, filter_size=filter_size, stride=stride, name='conv2d_%d'%index, activation=False, padding='VALID', normalization=normalization, training=training)
-        index += 1
+        y = conv2d(y, out_channel=out_dim, filter_size=filter_size, stride=stride, name='conv2d_%d'%layer_index, activation=False, padding='VALID', normalization=normalization, training=training)
+        layer_index += 1
 
-    return x + y, index
+    return x + y, layer_index
 
 def fc(x, hidden, dropout_ratio=0.5, activation=tf.nn.relu, dropout=True, name='fc', bias=True):
     _, in_dim = x.get_shape().as_list()
