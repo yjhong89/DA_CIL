@@ -21,8 +21,10 @@ def process_h5file(data_path, writer):
         try:
             tf.logging.info('Read %s' % f)
             hdf_content = h5py.File(f, 'r')
-            imgs = hdf_content.get('rgb')
-            lbls = hdf_content.get('targets')
+            imgs = hdf_content.get('tr_img')
+            lbls = hdf_content.get('tr_labels')
+            onds = hdf_content.get('tr_conds')
+            measures = hdf_content.get('tr_measure')
             if len(imgs) != len(lbls):
                 raise Exception
             num_files = len(imgs)
@@ -38,60 +40,48 @@ def process_h5file(data_path, writer):
             # Get image size: [height, width]: [88, 200]
             image_size = rgb_data.shape[:-1]
             # Get measures
-            steer, acc, s, o, t, c = _get_stats(lbls[i])
+            ang_z, linacc_x, linacc_y = _get_stats(lbls[i])
 
-            max_steer, max_acc, max_speed, max_or = _check_max(steer, acc, s, o)
-        
-            example = _make_tfexample(rgb_data, steer, acc, s, o, t, c)
+            example = _make_tfexample(rgb_data, np.array([lbls[i]]), np.array([ang_z]), np.array([linacc_x]), np.array([linacc_y]), _get_one_hot(conds[i]))
             # Write
             writer.write(example.SerializeToString())
 
     tf.logging.info('%s files has been completed into tfrecord' % data_path)
-    print('Max speed, ', max_speed)
-    print('Max_steer, ', max_steer)
-    print('Max_orientation, ', max_or)
-    print('max_acceleration, ', max_acc) 
     sys.stdout.write('\n')
     # Flush the buffer, write everything in the buffer to the terminal
     sys.stdout.flush()
 
-def _check_max(steer, acceleration, speed, orientation):
-    max_steer = 0
-    max_speed = 0
-    # x,y,z
-    max_acc = [0]*3
-    max_orientation = [0]*3
-
-    if max_steer < abs(steer):
-        max_steer = abs(steer)
-    if max_speed < abs(speed):
-        max_speed = abs(speed)
-    for n, i in enumerate(zip(max_acc, max_orientation)):
-        if i[0] < abs(acceleration[n]):
-            max_acc[n] = abs(acceleration[n])
-        if i[1] < abs(orientation[n]):
-            max_orientation[n] = abs(orientation[n])
-
-    return max_steer, max_acc, max_speed, max_orientation
+#def _check_max(steer, acceleration, speed, orientation):
+#    max_steer = 0
+#    max_speed = 0
+#    # x,y,z
+#    max_acc = [0]*3
+#    max_orientation = [0]*3
+#
+#    if max_steer < abs(steer):
+#        max_steer = abs(steer)
+#    if max_speed < abs(speed):
+#        max_speed = abs(speed)
+#    for n, i in enumerate(zip(max_acc, max_orientation)):
+#        if i[0] < abs(acceleration[n]):
+#            max_acc[n] = abs(acceleration[n])
+#        if i[1] < abs(orientation[n]):
+#            max_orientation[n] = abs(orientation[n])
+#
+#    return max_steer, max_acc, max_speed, max_orientation
 
 
 def _get_stats(label_info):
     # Already numpy file
     # Label: steering angle and acceleration
-    steering_angle = label_info[0]
-    acceleration = label_info[16:19]
-    # Measure: speed, orientation, traffic_rule
-    speed = label_info[10]
-    # orientation_xyz
-    orientation = label_info[21:24]
-    # traffic_rule: opposite lane inter, sidewalk intersect
-    traffic_rule = label_info[14:15]
-
+    ang_z = label_info[0]
+    linacc_x = label_info[1]
+    linacc_y = label_info[2]
     # command: (2, follow lane), (3, left), (4, right), (5, straight)
-    command = int(label_info[24])
-    command = _get_one_hot(command)
+    #command = int(label_info[24])
+    #command = _get_one_hot(command)
 
-    return steering_angle, acceleration, speed, orientation, traffic_rule, command
+    return ang_z, linacc_x, linacc_y
 
 def _get_one_hot(command):
     if not isinstance(command, int):
@@ -103,14 +93,13 @@ def _get_one_hot(command):
     return one_hot
 
 
-def _make_tfexample(image, steering_angle, acceleration, speed, orientation, traffic_rule, command):
+def _make_tfexample(image, steering, ang_z, linacc_x, linacc_y, command):
     return tf.train.Example(features=tf.train.Features(feature={
-            'rgb_data': _bytes_features(tf.compat.as_bytes(image.tostring())),
-            'label/steer': _float_features(steering_angle),
-            'label/acc': _float_features(acceleration),
-            'measures/speed': _float_features(speed),
-            'measures/orientation': _float_features(orientation),
-            'measures/traffic_rule': _float_features(traffic_rule), 
+            'image_raw': _bytes_features(tf.compat.as_bytes(image.tostring())),
+            'label/steer': _float_features(steering),
+            'measures/ang_z': _float_features(ang_z),
+            'measures/linacc_x': _float_features(linacc_x),
+            'measures/linacc_y': _float_features(linacc_y),
             'command': _bytes_features(tf.compat.as_bytes(command.tostring()))
             }))
 
@@ -237,7 +226,7 @@ _TARGET_ITEMS_TO_DESCRIPTIONS = {
             'image': 'A [180x320x3]',
             'label': 'A single integer between 0 and 8'}
 
-def get_batches(dataset_name, split_name, tfrecord_dir, batch_size, config=None):
+def get_batches_pixel_da(dataset_name, split_name, tfrecord_dir, batch_size, config=None):
     tfrecord_path = os.path.join(os.getcwd(), tfrecord_dir, '%s_%s.tfrecord' % (dataset_name, split_name))
     if not isinstance(tfrecord_path, (tuple, list)):
         tfrecord_path = [tfrecord_path]
@@ -337,6 +326,53 @@ def get_batches(dataset_name, split_name, tfrecord_dir, batch_size, config=None)
 #        label_batch = tf.reshape(label_batch, [-1, 9])
 
     return image_batch, label_batch
+
+
+def get_batches(dataset_name, split_name, tfrecord_dir, batch_size, config=None):
+    tfrecord_path = os.path.join(os.getcwd(), tfrecord_dir, '%s_%s.tfrecord' % (dataset_name, split_name))
+    if not isinstance(tfrecord_path, (tuple, list)):
+        tfrecord_path = [tfrecord_path]
+
+    num_examples = sum(sum(1 for _ in tf.python_io.tf_record_iterator(path)) for path in tfrecord_path)
+    tf.logging.info('%s_%s.tfrecord' % (dataset_name, split_name))
+
+    filename_queue = tf.train.string_input_producer(tfrecord_path, num_epochs=10)
+    reader = tf.TFRecordReader()
+
+    _, serialized_example = reader.read(filename_queue)
+
+    features = tf.parse_single_example(
+      serialized_example, features={
+        'image_raw': tf.FixedLenFeature([], tf.string),
+        #'label/steer': tf.FixedLenFeature([], tf.string),
+        'label/steer' : tf.FixedLenFeature([], tf.float32),
+        'measures/ang_z': tf.FixedLenFeature([], tf.float32),
+        'measures/linacc_x': tf.FixedLenFeature([], tf.float32),
+        'measures/linacc_y': tf.FixedLenFeature([], tf.float32),
+        'command' : tf.FixedLenFeature([], tf.string)})
+   
+    image = tf.decode_raw(features['image_raw'],tf.float32)
+    label = features['label/steer']
+    angz = features['measures/ang_z']
+    linx  = features['measures/linacc_x']
+    liny  = features['measures/linacc_y']
+    command = tf.decode_raw(features['command'],tf.float32)
+
+    print('==')
+    command = tf.reshape(command,[3])
+    image = tf.reshape(image,[240,360,3])
+    #label = tf.reshape(label,[1])
+
+    #images, labels, angzs, linxs, linys = tf.train.shuffle_batch([image,label,angz,linx,liny],batch_size=batch_size, capacity=30, num_threads=4, min_after_dequeue=10)
+    images, labels, angzs, linxs, linys, commands = tf.train.shuffle_batch([image,label,angz,linx,liny,command],batch_size=batch_size, capacity=30, num_threads=4, min_after_dequeue=10)
+
+    angzs = tf.expand_dims(angzs, 1)
+    linxs = tf.expand_dims(linxs, 1)
+    linys = tf.expand_dims(linys, 1)
+    measures = tf.concat([angzs,linxs,linys], 1)
+
+    return images, labels, measures, commands
+
 
 def check_tfrecord(dataset_name, split_name, tfrecord_dir): 
     tfrecord_path = os.path.join(os.getcwd(), tfrecord_dir, '%s_%s.tfrecord' % (dataset_name, split_name))
