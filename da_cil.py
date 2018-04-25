@@ -24,7 +24,7 @@ class model():
             self.generator = modules.generator(generator_channel, config, args)
             self.discriminator = modules.discriminator(discriminator_channel)
         # List of 4 branch modules
-        self.regression = modules.task_regression(regression_channel, image_fc, measurement_fc, branch_fc) 
+        self.regression = modules.task_regression(regression_channel, image_fc, measurement_fc, branch_fc, self.args.training) 
 
         self.summary = dict()
 

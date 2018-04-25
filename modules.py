@@ -528,7 +528,7 @@ class discriminator(object):
 
 
 class task_regression(object):
-    def __init__(self, channel, image_fc, measurement_fc, branch_fc, name='task_regression', training=True):
+    def __init__(self, channel, image_fc, measurement_fc, branch_fc, training=True, name='task_regression'):
         self.channel = channel
         self.name = name
         self.image_fc = image_fc
@@ -537,18 +537,17 @@ class task_regression(object):
         self.num_commands = 3
         self.training = training    
         if self.training:
-            self.dropout = [0.5, 0.2]
+            self.dropout = [0.7] * 2 + [0.5] * 2 + [0.5] * 1 + [0.5, 1.] * 5
         else:
-            self.dropout = [1.0] * 2
+            self.dropout = [1.0] * 10
 
-    
         # To optimize jointly with disicriminator since task regression and disicriminator are not related
         self.module_name = 'discriminator'
 
 
     def __call__(self, image, measurements, reuse_private=False, reuse_shared=False, private='private', shared='shared_task', mode='RESNET', reuse=False):
         image_layer_index = 0
-        measurement_layer_index = 0
+        fc_index = 0
         
         branches = list()
         
@@ -598,27 +597,29 @@ class task_regression(object):
                     x_shape = x.get_shape().as_list()
                     # Fully connected layer
                     flatten = tf.reshape(x, [-1, np.prod(x_shape[1:])])
-                    x = op.fc(flatten, self.image_fc, dropout_ratio=self.dropout[1], name='fc_%d'%image_layer_index)
-                    image_layer_index += 1
-                    x = op.fc(x, self.image_fc, dropout_ratio=self.dropout[1], name='fc_%d'%image_layer_index)
+                    x = op.fc(flatten, self.image_fc, dropout_ratio=self.dropout[1], name='fc_%d'%fc_index)
+                    fc_index += 1
+                    x = op.fc(x, self.image_fc, dropout_ratio=self.dropout[1], name='fc_%d'%fc_index)
+                    fc_index += 1
     
                 with tf.variable_scope('measurement_module'):
-                    y = op.fc(measurements, self.measurement_fc, dropout_ratio=self.dropout[measurement_layer_index], name='fc_%d'%measurement_layer_index)
-                    measurement_layer_index += 1    
-                    y = op.fc(y, self.measurement_fc, dropout_ratio=self.dropout[measurement_layer_index], name='fc_%d'%measurement_layer_index)
+                    y = op.fc(measurements, self.measurement_fc, dropout_ratio=self.dropout[measurement_layer_index], name='fc_%d'%fc_index)
+                    fc_index += 1    
+                    y = op.fc(y, self.measurement_fc, dropout_ratio=self.dropout[measurement_layer_index], name='fc_%d'%fc_index)
+                    fc_index += 1
                     
                 with tf.variable_scope('joint'):
                     joint = tf.concat([x,y], axis=-1, name='joint_representation')
-                    joint = op.fc(joint, self.image_fc, dropout_ratio=self.dropout[0], name='fc')
+                    joint = op.fc(joint, self.image_fc, dropout_ratio=self.dropout[0], name='fc_%d'%fc_index)
+                    fc_index += 1
         
                 for i in range(self.num_commands):
-                    branch_layer_index = 0
                     with tf.variable_scope('branch_%d'%i):
-                        branch_output = op.fc(joint, self.branch_fc, dropout_ratio=self.dropout[0], name='fc_%d'%branch_layer_index)
-                        branch_layer_index += 1
-                        branch_output = op.fc(branch_output, self.branch_fc, dropout_ratio=self.dropout[0], name='fc_%d'%branch_layer_index)
-                        branch_layer_index += 1
-                        branch_output = op.fc(branch_output, 1, dropout_ratio=self.dropout[0], name='fc_%d'%branch_layer_index)
+                        branch_output = op.fc(joint, self.branch_fc, dropout_ratio=self.dropout[0], name='fc_%d'%fc_index)
+                        fc_index += 1
+                        branch_output = op.fc(branch_output, self.branch_fc, dropout_ratio=self.dropout[0], name='fc_%d'%fc_index)
+                        fc_index += 1
+                        branch_output = op.fc(branch_output, 1, dropout=False, activation=None, name='fc_%d'%fc_index)
                         branches.append(branch_output)
     
         return branches

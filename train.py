@@ -79,7 +79,7 @@ def train(sess, args, config):
 
     if model_type == 'da_cil':
         with tf.name_scope(model_type + '_batches'):
-            source_image_batch, source_label_batch, source_measure_batch, source_command_batch = get_batches('source', 'train', tfrecord_dir, 2, config=config)
+            source_image_batch, source_label_batch, source_measure_batch, source_command_batch = get_batches('source', 'train', tfrecord_dir, batch_size=args.batch_size, config=config)
             #target_image_batch, _, _ = dataset_factpry.get_batches(tfrecord_dir, whether_for_source=False, data_type=args.data_type, config=config)
     
         da_model(source_image_batch, None, source_measure_batch)
