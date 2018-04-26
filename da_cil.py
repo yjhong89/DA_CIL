@@ -64,7 +64,7 @@ class model():
 
         with tf.name_scope('regression'):
             if self.source_only:
-                self.end = self.regression(self.summary['source_image'], measurements)
+                self.end, self.end_feature = self.regression(self.summary['source_image'], measurements)
             else:
                 self.end = self.regression(self.g_s2t[:,:,:,:3], measurements)  
                 if self.args.t2s_task:

@@ -52,7 +52,9 @@ def str2bool(v):
 def summarize(summary_set, t2s_option, source_only=False):
     if source_only:
         task_loss_summary = tf.summary.scalar('task_loss', summary_set['regression_loss'])
-        return tf.summary.merge([task_loss_summary])
+        source_image_summary = _summarize_transferred_grid(summary_set['source_image'])
+        return tf.summary.merge([task_loss_summary, source_image_summary])
+
     # Loss part
     cyclic_summary = tf.summary.scalar('cyclic_loss', summary_set['cyclic_loss'])
     s2t_g_loss_summary = tf.summary.scalar('s2t_g_loss', summary_set['s2t_g_loss'])
@@ -123,10 +125,11 @@ def _summarize_transferred_grid(source_images, transferred_images=None, name='Im
         source_images, transferred_imags: [batch size, height, width, channels]
     '''
     source_channels = source_images.get_shape().as_list()[-1]
-    transferred_channels = transferred_images.get_shape().as_list()[-1]
+    if transferred_images is not None:
+        transferred_channels = transferred_images.get_shape().as_list()[-1]
 
-    if source_channels != transferred_channels:
-        raise ValueError('Number of channels not match')
+        if source_channels != transferred_channels:
+            raise ValueError('Number of channels not match')
 
     if transferred_images is not None:
         grid = _merge_image_grid(source_images, transferred_images)

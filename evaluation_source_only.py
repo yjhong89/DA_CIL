@@ -47,18 +47,19 @@ def evaluation(sess, args, config):
     threads = tf.train.start_queue_runners(sess, coord)
 
     try:   
-        command = sess.run(source_command_batch)
-        print(command)
         for idx in range(10):
+            command, steer_label, np_im, steer_prediction = sess.run([source_command_batch, source_label_batch, source_image_batch, da_model.end])
+
+            steer_pred = np.concatenate(steer_prediction, axis=1)
             # Regression module has 3 branches for each command.
-            steer_prediction1, steer_prediction2, steer_prediction3 = sess.run(da_model.end)
-            steer_label = sess.run(source_label_batch)
-            
+#            steer_prediction_left, steer_prediction_straight, steer_prediction_right = sess.run(da_model.end)
+ #           steer_feature_left, steer_feature_straight, steer_feature_right = sess.run(da_model.end_feature)
             print('Steer label')
             print(steer_label)
             print('-'*20)
-            print('Steer prediction')
-            print(steer_prediction2)
+            print('Steer prediction with command')
+            print(steer_pred * command)
+            print('='*20)
             
 
     finally:

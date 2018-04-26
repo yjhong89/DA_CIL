@@ -101,15 +101,15 @@ def task_regression_loss(steer, command, logits):
     # Steer: [batch, 1], acc: [batch, 3]
     regression_output_list = list()
     for branch in range(len(logits)):
-        steer_output = tf.square(logits[branch][:,:1] - steer)
-        regression_output = tf.reduce_sum(steer_output, axis=-1)
-        regression_output_list.append(regression_output)
+        diff = tf.square(logits[branch][:,:1] - tf.expand_dims(steer, 1))
+        print(diff.get_shape().as_list())
+        #regression_output = tf.reduce_sum(diff, axis=1)
+        regression_output_list.append(diff)
         
     # [batch, 4]:, 4 represent 4 branch regression output
-    regression = tf.stack(regression_output_list, axis=-1)
+    regression = tf.concat(regression_output_list, axis=1)
+    print(regression.get_shape().as_list())
 
-    # One-hot encoded command
-    #self.command = tf.placeholder(tf.int32, [self.args.batch_size, 4], name='command')
     # Mask with command
     regression_loss = tf.reduce_mean(command * regression)
 
