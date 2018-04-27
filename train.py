@@ -86,7 +86,7 @@ def train(sess, args, config):
        
         with tf.name_scope(model_type + '_objectives'):
             da_model.create_objective(source_label_batch, source_command_batch)
-            discriminator_loss = da_model.regression_loss
+            discriminator_loss = da_model.classification_loss
             da_model.summary['discriminator_loss'] = discriminator_loss
 
     elif model_type == 'pixel_da':

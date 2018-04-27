@@ -527,7 +527,7 @@ class discriminator(object):
 
 
 
-class task_regression(object):
+class task(object):
     def __init__(self, channel, image_fc, measurement_fc, branch_fc, training=True, name='task_regression'):
         self.channel = channel
         self.name = name
@@ -621,10 +621,10 @@ class task_regression(object):
                         branch_output = op.fc(branch_output, self.branch_fc, dropout_ratio=self.dropout[fc_index], name='fc_%d'%fc_index)
                         fc_index += 1
                         branches_feature.append(branch_output)
-                        branch_output = op.fc(branch_output, 1, dropout=False, activation=None, name='fc_%d'%fc_index)
+                        branch_output = op.fc(branch_output, 5, dropout=False, activation=None, name='fc_%d'%fc_index)
                         branches.append(branch_output)
     
-        return branches, branches_feature
+        return branches
         
 class task_classifier(object):
     def __init__(self, channel, num_classes, training=True):

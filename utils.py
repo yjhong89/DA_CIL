@@ -51,9 +51,9 @@ def str2bool(v):
 
 def summarize(summary_set, t2s_option, source_only=False):
     if source_only:
-        task_loss_summary = tf.summary.scalar('task_loss', summary_set['regression_loss'])
-        source_image_summary = _summarize_transferred_grid(summary_set['source_image'])
-        return tf.summary.merge([task_loss_summary, source_image_summary])
+        task_loss_summary = tf.summary.scalar('task_loss', summary_set['classification_loss'])
+        source_image1_summary, source_image2_summary, source_image3_summary = _summarize_transferred_grid(summary_set['source_image'])
+        return tf.summary.merge([task_loss_summary, source_image1_summary, source_image2_summary, source_image3_summary])
 
     # Loss part
     cyclic_summary = tf.summary.scalar('cyclic_loss', summary_set['cyclic_loss'])
@@ -93,20 +93,41 @@ def _image_grid(images, max_grid_size=4):
     batch_size, height, width, channel = images.get_shape().as_list()
     grid_size = min(int(math.sqrt(batch_size)), max_grid_size)
     
-    assert channel == 3
     assert batch_size >= grid_size * grid_size
 
-    # To think easily, assume no channel
-    showing_images = images[:grid_size*grid_size,:,:,:]
-    showing_images = tf.reshape(showing_images, [-1, width, channel])
-    # tf.split, if num_or_size_split is an integer, split value along axis into num_split tensors
-        # if num_or_size_split is not an integer, it is presumed as a split size
-    showing_images = tf.split(showing_images, grid_size, 0)
-    # [height*grid_size, width*grid_size, channel]
-    showing_images = tf.concat(showing_images, 1)
+    if channel != 3:
+        # To think easily, assume no channel
+        showing_images = images[:grid_size*grid_size,:,:,:3]
+        showing_images = tf.reshape(showing_images, [-1, width, 3])
+        # tf.split, if num_or_size_split is an integer, split value along axis into num_split tensors
+            # if num_or_size_split is not an integer, it is presumed as a split size
+        showing_images = tf.split(showing_images, grid_size, 0)
+        # [height*grid_size, width*grid_size, channel]
+        showing_images1 = tf.concat(showing_images, 1)
+    
+        showing_images = images[:grid_size*grid_size,:,:,3:6]
+        showing_images = tf.reshape(showing_images, [-1, width, 3])
+        showing_images = tf.split(showing_images, grid_size, 0)
+        showing_images2 = tf.concat(showing_images, 1)
+    
+        showing_images = images[:grid_size*grid_size,:,:,6:9]
+        showing_images = tf.reshape(showing_images, [-1, width, 3])
+        showing_images = tf.split(showing_images, grid_size, 0)
+        showing_images3 = tf.concat(showing_images, 1)
 
-    # tf.summary.image: image must be 4D
-    return tf.expand_dims(showing_images, 0)
+        return tf.expand_dims(showing_images1, 0), tf.expand_dims(showing_images2, 0), tf.expand_dims(showing_images3, 0)
+
+    else:
+        # To think easily, assume no channel
+        showing_images = images[:grid_size*grid_size,:,:,:3]
+        showing_images = tf.reshape(showing_images, [-1, width, channel])
+        # tf.split, if num_or_size_split is an integer, split value along axis into num_split tensors
+            # if num_or_size_split is not an integer, it is presumed as a split size
+        showing_images = tf.split(showing_images, grid_size, 0)
+        # [height*grid_size, width*grid_size, channel]
+        showing_images = tf.concat(showing_images, 1)
+
+        return tf.expand_dims(showing_images, 0)
 
 def _merge_image_grid(source_images, transferred_images, max_grid_size=4):
     source_grid = _image_grid(source_images)
@@ -128,13 +149,16 @@ def _summarize_transferred_grid(source_images, transferred_images=None, name='Im
     if transferred_images is not None:
         transferred_channels = transferred_images.get_shape().as_list()[-1]
 
+        grid = _merge_image_grid(source_images, transferred_images)
         if source_channels != transferred_channels:
             raise ValueError('Number of channels not match')
 
-    if transferred_images is not None:
-        grid = _merge_image_grid(source_images, transferred_images)
     else:
-        grid = _image_grid(source_images)
+        if source_channels == 3:
+            grid = _image_grid(source_images)
+        else:
+            grid1, grid2, grid3 = _image_grid(source_images)
+            return tf.summary.image('%s_image_grid' % name, grid1, max_outputs=1), tf.summary.image('%s_image_grid' % name, grid2, max_outputs=1), tf.summary.image('%s_image_grid' % name, grid3, max_outputs=1), 
 
     # max_outputs: max number of batch to generate images
     # name/Image
