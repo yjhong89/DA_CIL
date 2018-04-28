@@ -24,7 +24,7 @@ class model():
             self.generator = modules.generator(generator_channel, config, args)
             self.discriminator = modules.discriminator(discriminator_channel)
         # List of 4 branch modules
-        self.regression = modules.task_regression(regression_channel, image_fc, measurement_fc, branch_fc, self.args.training) 
+        self.task = modules.task(regression_channel, image_fc, measurement_fc, branch_fc, self.args.training) 
 
         self.summary = dict()
 
@@ -64,14 +64,12 @@ class model():
 
         with tf.name_scope('regression'):
             if self.source_only:
-                self.end, self.end_feature = self.regression(self.summary['source_image'], measurements)
+                self.end = self.task(self.summary['source_image'], measurements)
             else:
-                self.end = self.regression(self.g_s2t[:,:,:,:3], measurements)  
+                self.end = self.task(self.g_s2t[:,:,:,:3], measurements)  
                 if self.args.t2s_task:
-                    self.t2s_end = self.regression(self.g_t2s, measurements, reuse=True)
+                    self.t2s_end = self.task(self.g_t2s, measurements, private='t2s_private', reuse_shared=True)
 
-            #if not self.args.training:
-                
                 
 
     def create_objective(self, steer, command):
@@ -99,11 +97,11 @@ class model():
                 self.summary['t2s_d_loss'] = self.t2s_d_loss            
 
         with tf.name_scope('task'):
-            self.regression_loss = losses.task_regression_loss(steer, command, self.end)
-            self.summary['regression_loss'] = self.regression_loss
+            self.classification_loss = losses.task_classifier_loss(steer, command, self.end)
+            self.summary['classification_loss'] = self.classification_loss
             if self.args.t2s_task:
-                self.t2s_regression_loss = losses.task_regression_loss(steer, acceleration, command, self.t2s_end, self.acc_weight)
-                self.summary['t2s_regression_loss'] = self.t2s_regression_loss
+                self.t2s_classifier_loss = losses.task_classifier_loss(steer, acceleration, command, self.t2s_end, self.acc_weight)
+                self.summary['t2s_regression_loss'] = self.t2s_classifier_loss
 
 
         

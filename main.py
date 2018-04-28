@@ -4,7 +4,8 @@ import argparse
 import configparser
 import utils
 from train import train
-from evaluation import evaluation
+import evaluation_pixel_da
+import evaluation_source_only
 
 os.environ['CUDA_DEVICE_ORDER'] = 'PCI_BUS_ID'
 os.environ['CUDA_VISIBLE_DEVICES'] = '1'
@@ -18,15 +19,16 @@ def main():
     parser.add_argument('--batch_size', type=int, default=4)
     parser.add_argument('--clip_norm', type=float, default=5.0)
     parser.add_argument('--optimizer', type=str, default='adam')
-    parser.add_argument('--training', type=utils.str2bool, default='t')
+    parser.add_argument('--training', type=utils.str2bool, default='f')
     parser.add_argument('--max_iter', type=int, default=400000)
     parser.add_argument('--t2s_task', type=utils.str2bool, default='f')
     parser.add_argument('--pixel_norm', type=utils.str2bool, default='t')
     parser.add_argument('--learning_rate', type=float, default=0.005)
     parser.add_argument('--lr_decay', type=utils.str2bool, default='n')
-    parser.add_argument('--save_interval', type=int, default=1000)
-    parser.add_argument('--summary_interval', type=int, default=10)
+    parser.add_argument('--save_interval', type=int, default=100)
+    parser.add_argument('--summary_interval', type=int, default=5)
     parser.add_argument('--load_ckpt', type=utils.str2bool, default='t')
+    parser.add_argument('--num_eval', type=int, default=20)
 
     args = parser.parse_args()
     if args.log:
@@ -44,7 +46,10 @@ def main():
             train(sess, args, config)
         else:
             tf.logging.info('Inference')
-            evaluation(sess, args, config)
+            if config.getboolean('config', 'source_only'):
+                evaluation_source_only.evaluation(sess, args, config)
+            else:
+                evaluation_pixel_da.evaluation(sess, args, config)
 
 
 if __name__ == "__main__":

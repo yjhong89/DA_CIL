@@ -47,16 +47,36 @@ def evaluation(sess, args, config):
     threads = tf.train.start_queue_runners(sess, coord)
 
     try:   
-        for idx in range(100):
-            command, steer_label, np_im, steer_prediction = sess.run([source_command_batch, source_label_batch, source_image_batch, da_model.end])
-
-            steer_pred = np.concatenate(steer_prediction, axis=1)
+        for idx in range(args.num_eval):
+            # tf.nn.softmax's default axis is -1 (last dimension)
+            command_l = tf.nn.softmax(da_model.end[0])
+            command_s = tf.nn.softmax(da_model.end[1])
+            command_r = tf.nn.softmax(da_model.end[2])
+            command, steer_label, np_im, steer_prediction_l, steer_prediction_s, steer_prediction_r = sess.run([source_command_batch, source_label_batch, source_image_batch, command_l, command_s, command_r])
+            print('COMMAND LABEL')
+            print(command)
+            #steer_pred = np.concatenate(steer_prediction, axis=1)
             # Regression module has 3 branches for each command.
-            print('Steer label')
+            print('STEER')
             print(steer_label)
-            print('-'*20)
-            print('Steer prediction with command')
-            #print(steer_pred * command)
+            #print('-'*20)
+            #print('LEFT COMMAND')
+            #print(steer_prediction_l)
+            #print('STRAIGHT COMMAND')
+            #print(steer_prediction_s)
+            #print('RIGHT_COMMAND')
+            #print(steer_prediction_r)
+            
+            print('RESULT')
+            steer = np.concatenate([steer_prediction_l, steer_prediction_s, steer_prediction_r], axis=1)
+            steer = steer.reshape([args.batch_size, command.shape[-1], steer_label.shape[-1]])
+            steer = steer * np.expand_dims(command, 2)
+            steer_result = list()
+            for i in range(args.batch_size):
+                steer_result.append(steer[i, command[i]!=0])
+                
+            steer_result = np.concatenate(steer_result, 0)
+            print(steer_result)
             print('='*20)
             
 
