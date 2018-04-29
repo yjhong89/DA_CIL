@@ -64,13 +64,11 @@ class model():
 
         with tf.name_scope('regression'):
             if self.source_only:
-                self.end = self.task(self.summary['source_image'], measurements)
+                self.end, self.cnn = self.task(self.summary['source_image'], measurements)
             else:
                 self.end = self.task(self.g_s2t[:,:,:,:3], measurements)  
                 if self.args.t2s_task:
                     self.t2s_end = self.task(self.g_t2s, measurements, private='t2s_private', reuse_shared=True)
-
-                
 
     def create_objective(self, steer, command):
         if not self.source_only:
@@ -97,7 +95,7 @@ class model():
                 self.summary['t2s_d_loss'] = self.t2s_d_loss            
 
         with tf.name_scope('task'):
-            self.classification_loss = losses.task_classifier_loss(steer, command, self.end)
+            self.classification_loss, self.classification = losses.task_classifier_loss(steer, command, self.end)
             self.summary['classification_loss'] = self.classification_loss
             if self.args.t2s_task:
                 self.t2s_classifier_loss = losses.task_classifier_loss(steer, acceleration, command, self.t2s_end, self.acc_weight)

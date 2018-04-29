@@ -119,20 +119,23 @@ def task_regression_loss(steer, command, logits):
 def task_classifier_loss(steer_label, command, logits, num_classes=5):
     assert isinstance(logits, list)
     assert len(steer_label.get_shape().as_list()) == 2
-   
+
     classifier_output_list = list()
     for branch in range(len(logits)):
         # [batch, ]
+        # Label smoothing
         loss = tf.nn.softmax_cross_entropy_with_logits(labels=steer_label, logits=logits[branch])        
         classifier_output_list.append(tf.expand_dims(loss, 1))
 
-    
     classification = tf.concat(classifier_output_list, axis=1)
-    print(classification.get_shape().as_list())
 
     # Mask with comamnd
     classification_loss = tf.reduce_mean(command * classification)
-    return classification_loss
+    #classification_loss = tf.reduce_mean(classifier_output_list[1])
+    
+    loss = classification_loss# + tf.reduce_sum(tf.get_collection(tf.GraphKeys.REGULARIZATION_LOSSES))
+    
+    return loss, classification
 
 
 def task_classifier_pixel_da_loss(head_labels, lateral_labels, head_logits, lateral_logits, num_classes=3):

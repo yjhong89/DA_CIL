@@ -286,7 +286,7 @@ def da_cil(dataset_name, split_name, tfrecord_dir, batch_size, config=None):
     image -= 0.5
     image *= 2
 
-    images, labels, angzs, linxs, linys, commands = tf.train.shuffle_batch([image,label,angz,linx,liny,command],batch_size=batch_size, capacity=30, num_threads=4, min_after_dequeue=10)
+    images, labels, angzs, linxs, linys, commands = tf.train.shuffle_batch([image,label,angz,linx,liny,command],batch_size=batch_size, capacity=10*batch_size, num_threads=4, min_after_dequeue=batch_size)
 
     angzs = tf.expand_dims(angzs, 1)
     linxs = tf.expand_dims(linxs, 1)

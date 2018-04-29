@@ -560,16 +560,20 @@ class task(object):
                 with tf.variable_scope('image_module'):
                     if mode == 'RESNET':
                         with tf.variable_scope(private, reuse=reuse_private):
+                            # [240, 360]
                             x = op.conv2d(image, out_channel=self.channel, filter_size=7, stride=2, normalization=op._batch_norm, activation=tf.nn.relu, name='conv2d_%d'%image_layer_index)
                         image_layer_index += 1
     
                         with tf.variable_scope(shared, reuse_shared):
+                            # [120, 180]
                             x, image_layer_index = op.residual_block(x, out_dim=self.channel, layer_index=image_layer_index, normalization=op._batch_norm, downsample=False, training=self.training)
                             x, image_layer_index = op.residual_block(x, out_dim=self.channel, layer_index=image_layer_index, normalization=op._batch_norm, downsample=False, training=self.training)
                             x, image_layer_index = op.residual_block(x, out_dim=self.channel*2, layer_index=image_layer_index, normalization=op._batch_norm, downsample=True, training=self.training)
                             x, image_layer_index = op.residual_block(x, out_dim=self.channel*2, layer_index=image_layer_index, normalization=op._batch_norm, downsample=False, training=self.training)
+                            # [60, 90]
                             x, image_layer_index = op.residual_block(x, out_dim=self.channel*4, layer_index=image_layer_index, normalization=op._batch_norm, downsample=True, training=self.training)
                             x, image_layer_index = op.residual_block(x, out_dim=self.channel*4, layer_index=image_layer_index, normalization=op._batch_norm, downsample=False, training=self.training)
+                            # [30, 45]
                             x, image_layer_index = op.residual_block(x, out_dim=self.channel*8, layer_index=image_layer_index, normalization=op._batch_norm, downsample=True, training=self.training)
                             x, image_layer_index = op.residual_block(x, out_dim=self.channel*8, layer_index=image_layer_index, normalization=op._batch_norm, downsample=False, training=self.training)
                
@@ -595,13 +599,16 @@ class task(object):
                             x = op.conv2d(x, out_channel=self.channel*8, filter_size=3, stride=1, activation=tf.nn.relu, name='conv2d_%d'%image_layer_index)
                             image_layer_index += 1
    
-                    x_shape = x.get_shape().as_list()
+                    #x_shape = x.get_shape().as_list()
                     # Fully connected layer
-                    flatten = tf.reshape(x, [-1, np.prod(x_shape[1:])])
-                    x = op.fc(flatten, self.image_fc, dropout_ratio=self.dropout[fc_index], name='fc_%d'%fc_index)
-                    fc_index += 1
-                    x = op.fc(x, self.image_fc, dropout_ratio=self.dropout[fc_index], name='fc_%d'%fc_index)
-                    fc_index += 1
+                    #flatten = tf.reshape(x, [-1, np.prod(x_shape[1:])])
+                    x = op.global_average_pooling(x)
+
+                    #x1 = tf.layers.dense(flatten, self.image_fc, activation=tf.nn.relu, kernel_regularizer=tf.contrib.layers.l2_regularizer(scale=0.1))
+                    #x1 = op.fc(flatten, self.image_fc, dropout=False, dropout_ratio=self.dropout[fc_index], name='fc_%d'%fc_index)
+                    #fc_index += 1
+                    #x = op.fc(x1, self.image_fc, dropout_ratio=self.dropout[fc_index], name='fc_%d'%fc_index)
+                    #fc_index += 1
     
                 with tf.variable_scope('measurement_module'):
                     y = op.fc(measurements, self.measurement_fc, dropout_ratio=self.dropout[fc_index], name='fc_%d'%fc_index)
@@ -610,21 +617,23 @@ class task(object):
                     fc_index += 1
                     
                 with tf.variable_scope('joint'):
-                    joint = tf.concat([x,y], axis=-1, name='joint_representation')
-                    joint = op.fc(joint, self.image_fc, dropout_ratio=self.dropout[fc_index], name='fc_%d'%fc_index)
-                    fc_index += 1
+                    #joint = tf.concat([x,y], axis=-1, name='joint_representation')
+                    joint = tf.concat([x], axis=-1, name='joint_representation')
+                    #joint = op.fc(joint, self.image_fc, dropout_ratio=self.dropout[fc_index], name='fc_%d'%fc_index)
+                    #fc_index += 1
         
                 for i in range(self.num_commands):
                     with tf.variable_scope('branch_%d'%i):
-                        branch_output = op.fc(joint, self.branch_fc, dropout_ratio=self.dropout[fc_index], name='fc_%d'%fc_index)
-                        fc_index += 1
-                        branch_output = op.fc(branch_output, self.branch_fc, dropout_ratio=self.dropout[fc_index], name='fc_%d'%fc_index)
-                        fc_index += 1
-                        branches_feature.append(branch_output)
-                        branch_output = op.fc(branch_output, 5, dropout=False, activation=None, name='fc_%d'%fc_index)
+                        #branch_output = op.fc(joint, dropout=False, self.branch_fc, dropout_ratio=self.dropout[fc_index], name='fc_%d'%fc_index)
+                        #fc_index += 1
+                        #branch_output = op.fc(branch_output, self.branch_fc, dropout_ratio=self.dropout[fc_index], name='fc_%d'%fc_index)
+                        #fc_index += 1
+                        #branch_output = op.fc(branch_output, 5, dropout=False, activation=None, name='fc_%d'%fc_index)
+                        #branch_output = tf.layers.dense(joint, 5, kernel_regularizer=tf.contrib.layers.l2_regularizer(scale=0.1))
+                        branch_output = op.fc(joint, 5, dropout=False, activation=None, name='fc_%d'%fc_index)
                         branches.append(branch_output)
     
-        return branches
+        return branches, x
         
 class task_classifier(object):
     def __init__(self, channel, num_classes, training=True):
@@ -651,11 +660,13 @@ class task_classifier(object):
     
             # Last layers in the classifier
             with tf.variable_scope(shared, reuse=reuse_shared):
+                # Down sample 2
                 x, layer_index = op.dilated_residual_block(x, out_dim=self.channel*2, layer_index=layer_index, downsample=True, normalization=op._batch_norm, name='residual_%d'%residual_index, training=self.training)
                 residual_index += 1
                 x, layer_index = op.dilated_residual_block(x, out_dim=self.channel*2, layer_index=layer_index, downsample=False, normalization=op._batch_norm, name='residual_%d'%residual_index, training=self.training)
                 residual_index += 1
-
+        
+                # Dilated convolution instead of down sample
                 x, layer_index = op.dilated_residual_block(x, out_dim=self.channel*4, dilation_rate=2, layer_index=layer_index, downsample=False, normalization=op._batch_norm, name='residual_%d'%residual_index, training=self.training)
                 residual_index += 1
                 x, layer_index = op.dilated_residual_block(x, out_dim=self.channel*4, dilation_rate=2, layer_index=layer_index, downsample=False, normalization=op._batch_norm, name='residual_%d'%residual_index, training=self.training)

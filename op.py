@@ -70,7 +70,7 @@ def attention_gate(x, g, f_int, layer_index, name='attention', normalization=_in
     return result
 
 
-def residual_block(x, out_dim, layer_index, filter_size=3, stride=1, name='residual', normalization=_instance_norm, downsample=True, training=True):
+def residual_block(x, out_dim, layer_index, filter_size=3, stride=1, name='residual', normalization=_instance_norm, downsample=True, training=True, activation=tf.nn.relu):
     in_dim = x.get_shape().as_list()[-1]
     if in_dim == out_dim:
         increase_dim = False
@@ -82,7 +82,7 @@ def residual_block(x, out_dim, layer_index, filter_size=3, stride=1, name='resid
         if downsample:
             x = _max_pool(x)
             y = tf.pad(x, [[0,0], [padding, padding], [padding, padding], [0,0]], 'REFLECT')
-            y = conv2d(y, out_channel=out_dim, filter_size=filter_size, stride=stride, name='conv2d_%d'%layer_index, activation=tf.nn.relu, padding='VALID', normalization=normalization, training=training)
+            y = conv2d(y, out_channel=out_dim, filter_size=filter_size, stride=stride, name='conv2d_%d'%layer_index, activation=activation, padding='VALID', normalization=normalization, training=training)
             x = tf.pad(x, [[0,0],[0,0],[0,0],[in_dim//2,in_dim//2]], 'CONSTANT')
 
         else:
@@ -90,7 +90,7 @@ def residual_block(x, out_dim, layer_index, filter_size=3, stride=1, name='resid
                 x = tf.pad(x, [[0,0],[0,0],[0,0],[in_dim//2,in_dim//2]], 'CONSTANT')
             
             y = tf.pad(x, [[0,0],[padding, padding], [padding,padding],[0,0]], 'REFLECT')
-            y = conv2d(y, out_channel=out_dim, filter_size=filter_size, stride=stride, name='conv2d_%d'%layer_index, activation=tf.nn.relu, padding='VALID', normalization=normalization, training=training)
+            y = conv2d(y, out_channel=out_dim, filter_size=filter_size, stride=stride, name='conv2d_%d'%layer_index, activation=activation, padding='VALID', normalization=normalization, training=training)
         layer_index += 1
 
         y = tf.pad(y, [[0,0],[padding, padding], [padding,padding],[0,0]], 'REFLECT')
@@ -105,7 +105,7 @@ def fc(x, hidden, dropout_ratio=0.5, activation=tf.nn.relu, dropout=True, name='
         weight = tf.get_variable('weight', shape=[in_dim, hidden], initializer=tf.contrib.layers.xavier_initializer())
         output = tf.matmul(x, weight)
         if bias:
-            bias = tf.get_variable('bias', shape=[hidden], initializer=tf.constant_initializer(0))
+            bias = tf.get_variable('bias', shape=[hidden], initializer=tf.constant_initializer(0.1))
             output = output + bias
 
         if dropout:
@@ -129,7 +129,7 @@ def dilated_conv2d(x, out_channel, filter_size, dilation_rate, name='dilated_con
         output = tf.nn.convolution(x, weight, padding=padding, dilation_rate=rate)
 
         if bias:
-            bias = tf.get_variable('bias', shape=[out_channel], initializer=tf.constant_initializer(0))
+            bias = tf.get_variable('bias', shape=[out_channel], initializer=tf.constant_initializer(0.1))
             output = output + bias
 
         if normalization:
@@ -151,7 +151,7 @@ def conv2d(x, out_channel, filter_size=4, stride=2, name='conv2d', activation=_l
         output = tf.nn.conv2d(x, weight, strides=[1, stride, stride, 1], padding=padding, data_format='NHWC', name='convolution')
         
         if bias:
-            bias = tf.get_variable('bias', shape=[out_channel], initializer=tf.constant_initializer(0))
+            bias = tf.get_variable('bias', shape=[out_channel], initializer=tf.constant_initializer(0.1))
             output = output + bias
 
         if normalization:
