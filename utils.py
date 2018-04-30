@@ -25,6 +25,7 @@ def make_savedir(config):
     noise = config.getboolean('generator', 'noise')
     mask = config.getboolean('config', 'input_mask')
     gen_type = config.get('generator', 'type')
+    source_only = config.get('config', 'source_only')
 
     result = model_type + '_' + adversarial_mode + '_' + gen_type
 
@@ -38,6 +39,9 @@ def make_savedir(config):
             result = result + '_wo_noise_mask'
         else:
             result = result + '_wo_noise_wo_mask'
+
+    if source_only:
+        result = result + '_source_only'
 
     return result
 

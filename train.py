@@ -104,7 +104,7 @@ def train(sess, args, config):
             source_lateral_label_batch = (source_label_max_batch % 9) / 3
             source_head_label_batch = source_label_max_batch % 3
             
-            target_image_batch, _ = dataset_utils.get_batches('target', 'train', tfrecord_dir, batch_size=args.batch_size, config=config)
+            target_image_batch, _ = get_batches('target', 'train', tfrecord_dir, batch_size=args.batch_size, config=config)
 
         da_model(source_image_batch, target_image_batch)
 

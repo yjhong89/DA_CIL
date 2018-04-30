@@ -8,7 +8,7 @@ import evaluation_pixel_da
 import evaluation_source_only
 
 os.environ['CUDA_DEVICE_ORDER'] = 'PCI_BUS_ID'
-os.environ['CUDA_VISIBLE_DEVICES'] = '1'
+os.environ['CUDA_VISIBLE_DEVICES'] = '0'
 
 
 def main():
@@ -16,7 +16,7 @@ def main():
     parser.add_argument('-d', '--delete', action='store_true')
     parser.add_argument('-l', '--log', action='store_true')
     parser.add_argument('--config', default='config.ini')
-    parser.add_argument('--batch_size', type=int, default=5)
+    parser.add_argument('--batch_size', type=int, default=16)
     parser.add_argument('--clip_norm', type=float, default=5.0)
     parser.add_argument('--optimizer', type=str, default='adam')
     parser.add_argument('--training', type=utils.str2bool, default='t')
