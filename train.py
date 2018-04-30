@@ -80,14 +80,27 @@ def train(sess, args, config):
     if model_type == 'da_cil':
         with tf.name_scope(model_type + '_batches'):
             source_image_batch, source_label_batch, source_measure_batch, source_command_batch = get_batches('source', 'train', tfrecord_dir, batch_size=args.batch_size, config=config)
-            #target_image_batch, _, _ = dataset_factpry.get_batches(tfrecord_dir, whether_for_source=False, data_type=args.data_type, config=config)
     
-        da_model(source_image_batch, None, source_measure_batch)
-       
+        if source_only:
+            da_model(source_image_batch, None, source_measure_batch)
+        else:       
+            target_image_batch, _, _, _ = get_batches('target', 'train', tfrecord_dir, batch_size=args.batch_size, config=config)
+            da_model(source_image_batch, target_image_batch, source_measure_batch)
+
         with tf.name_scope(model_type + '_objectives'):
             da_model.create_objective(source_label_batch, source_command_batch)
-            discriminator_loss = da_model.classification_loss
-            da_model.summary['discriminator_loss'] = discriminator_loss
+
+            if source_only:
+                discriminator_loss = da_model.classification_loss
+                da_model.summary['discriminator_loss'] = discriminator_loss
+            else:
+                generator_loss = s2t_cyclic_weight * da_model.s2t_cyclic_loss + t2s_cyclic_weight * da_model.t2s_cyclic_loss + s2t_adversarial_weight * da_model.s2t_g_loss + t2s_adversarial_weight * da_model.t2s_g_loss
+                da_model.summary['generator_loss'] = generator_loss
+
+                discriminator_loss = s2t_adversarial_weight * da_model.s2t_d_loss + t2s_adversarial_weight * da_model.t2s_d_loss + s2t_task_weight * da_model.classification_loss 
+                if args.t2s_task:
+                    discriminator_loss += t2s_task_weight * da_model.t2s_task_loss 
+                da_model.summary['discriminator_loss'] = discriminator_loss
 
     elif model_type == 'pixel_da':
         tf.logging.info('Training %s' % model_type)

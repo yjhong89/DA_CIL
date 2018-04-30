@@ -25,7 +25,7 @@ def make_savedir(config):
     noise = config.getboolean('generator', 'noise')
     mask = config.getboolean('config', 'input_mask')
     gen_type = config.get('generator', 'type')
-    source_only = config.get('config', 'source_only')
+    source_only = config.getboolean('config', 'source_only')
 
     result = model_type + '_' + adversarial_mode + '_' + gen_type
 
@@ -65,22 +65,22 @@ def summarize(summary_set, t2s_option, source_only=False):
     t2s_g_loss_summary = tf.summary.scalar('t2s_g_loss', summary_set['t2s_g_loss'])
     s2t_d_loss_summary = tf.summary.scalar('s2t_d_loss', summary_set['s2t_d_loss'])
     t2s_d_loss_summary = tf.summary.scalar('t2s_d_loss', summary_set['t2s_d_loss'])
-    task_loss_summary = tf.summary.scalar('task_loss', summary_set['task_loss'])
+    task_loss_summary = tf.summary.scalar('task_loss', summary_set['classification_loss'])
     if t2s_option:
         t2s_task_loss_summary = tf.summary.scalar('t2s_task_loss', summary_set['t2s_task_loss'])
     else:
-        t2s_task_loss_summary = tf.summary.scalar('t2s_regression_loss', 0)
+        t2s_task_loss_summary = tf.summary.scalar('t2s_task_loss', 0)
     generator_loss_summary = tf.summary.scalar('generator_loss', summary_set['generator_loss'])
     discriminator_loss_summary = tf.summary.scalar('discriminator_loss', summary_set['discriminator_loss'])
 
     # Image part
-    s2t_summary = _summarize_transferred_grid(summary_set['source_image'], summary_set['source_transferred'], name='S2T')
-    t2s_summary = _summarize_transferred_grid(summary_set['target_image'], summary_set['target_transferred'], name='T2S')
-    s2t2s_summary = _summarize_transferred_grid(summary_set['source_image'], summary_set['back2source'], name='S2T2S')
-    t2s2t_summary = _summarize_transferred_grid(summary_set['target_image'], summary_set['back2target'], name='T2S2T')
+    s2t_summary1, s2t_summary2, s2t_summary3 = _summarize_transferred_grid(summary_set['source_image'], summary_set['source_transferred'], name='S2T')
+    t2s_summary1, t2s_summary2, t2s_summary3 = _summarize_transferred_grid(summary_set['target_image'], summary_set['target_transferred'], name='T2S')
+    s2t2s_summary1, s2t2s_summary2, s2t2s_summary3 = _summarize_transferred_grid(summary_set['source_image'], summary_set['back2source'], name='S2T2S')
+    t2s2t_summary1, t2s2t_summary2, t2s2t_summary3 = _summarize_transferred_grid(summary_set['target_image'], summary_set['back2target'], name='T2S2T')
 
     discriminator_merged = [s2t_d_loss_summary, t2s_d_loss_summary, task_loss_summary, t2s_task_loss_summary, discriminator_loss_summary]
-    generator_merged = [cyclic_summary, s2t_g_loss_summary, t2s_g_loss_summary, generator_loss_summary, s2t_summary, t2s_summary, s2t2s_summary, t2s2t_summary]
+    generator_merged = [cyclic_summary, s2t_g_loss_summary, t2s_g_loss_summary, generator_loss_summary, s2t_summary1, s2t_summary2, s2t_summary3, t2s_summary1, t2s_summary2, t2s_summary3, s2t2s_summary1, s2t2s_summary2, s2t2s_summary3, t2s2t_summary1, t2s2t_summary2, t2s2t_summary3]
 
     generator_merge_summary = tf.summary.merge(generator_merged)
     discriminator_merge_summary = tf.summary.merge(discriminator_merged)
@@ -134,15 +134,17 @@ def _image_grid(images, max_grid_size=4):
         return tf.expand_dims(showing_images, 0)
 
 def _merge_image_grid(source_images, transferred_images, max_grid_size=4):
-    source_grid = _image_grid(source_images)
-    transferred_grid = _image_grid(transferred_images)
+    source_grid1, source_grid2, source_grid3 = _image_grid(source_images)
+    transferred_grid1, transferred_grid2, transferred_grid3 = _image_grid(transferred_images)
     
     # check channel
-    assert source_grid.get_shape().as_list()[-1] == transferred_grid.get_shape().as_list()[-1]
+    #assert source_grid.get_shape().as_list()[-1] == transferred_grid.get_shape().as_list()[-1]
 
-    output_grid = tf.concat([source_grid, transferred_grid], 1)
+    output_grid1 = tf.concat([source_grid1, transferred_grid1], 1)
+    output_grid2 = tf.concat([source_grid2, transferred_grid2], 1)
+    output_grid3 = tf.concat([source_grid3, transferred_grid3], 1)
 
-    return output_grid
+    return output_grid1, output_grid2, output_grid3
 
 
 def _summarize_transferred_grid(source_images, transferred_images=None, name='Image_grid'):
@@ -153,20 +155,21 @@ def _summarize_transferred_grid(source_images, transferred_images=None, name='Im
     if transferred_images is not None:
         transferred_channels = transferred_images.get_shape().as_list()[-1]
 
-        grid = _merge_image_grid(source_images, transferred_images)
+        grid1, grid2, grid3 = _merge_image_grid(source_images, transferred_images)
         if source_channels != transferred_channels:
             raise ValueError('Number of channels not match')
 
+        # max_outputs: max number of batch to generate images
+        # name/Image
+        return tf.summary.image('%s_image_grid' % name, grid1, max_outputs=1), tf.summary.image('%s_image_grid' % name, grid2, max_outputs=1), tf.summary.image('%s_image_grid' % name, grid3, max_outputs=1), 
     else:
         if source_channels == 3:
             grid = _image_grid(source_images)
+            return grid
         else:
             grid1, grid2, grid3 = _image_grid(source_images)
             return tf.summary.image('%s_image_grid' % name, grid1, max_outputs=1), tf.summary.image('%s_image_grid' % name, grid2, max_outputs=1), tf.summary.image('%s_image_grid' % name, grid3, max_outputs=1), 
 
-    # max_outputs: max number of batch to generate images
-    # name/Image
-    return tf.summary.image('%s_image_grid' % name, grid, max_outputs=1)
 
 def config_summary(save_dir, s2t_adversarial_weight, t2s_adversarial_weight, s2t_cyclic_weight, t2s_cyclic_weight, s2t_task_weight, t2s_task_weight, discriminator_step, generator_step, adversarial_mode, whether_noise, noise_dim):
     if not os.path.exists(save_dir):

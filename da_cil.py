@@ -10,9 +10,6 @@ class model():
         self.args = args
 
         model_name = config.get('config', 'experiment')
-        discriminator_channel = config.getint('discriminator', 'channel')
-        generator_type = config.get('generator', 'type')
-        generator_channel = config.getint('generator', 'channel')
         regression_channel = config.getint('regression', 'channel')
         image_fc = config.getint('regression', 'image_fc')
         measurement_fc = config.getint('regression', 'measurement_fc')
@@ -21,6 +18,10 @@ class model():
         self.source_only = config.getboolean('config', 'source_only')
 
         if not self.source_only:
+            discriminator_channel = config.getint('discriminator', 'channel')
+            self.generator_type = config.get('generator', 'type')
+            generator_channel = config.getint('generator', 'channel')
+            self.generator_out_channel = config.getint('generator', 'out_channel')
             self.generator = modules.generator(generator_channel, config, args)
             self.discriminator = modules.discriminator(discriminator_channel)
         # List of 4 branch modules
@@ -43,18 +44,18 @@ class model():
     
                 self.g_s2t, self.source_noise = generator_func(source, name='G_S2T')
                 self.g_t2s, self.target_noise = generator_func(target, name='G_T2S')
-                self.s2t2s, _ = generator_func(self.g_s2t[:,:,:,:3], reuse=True, name='G_T2S')
-                self.t2s2t, _ = generator_func(self.g_t2s[:,:,:,:3], reuse=True, name='G_S2T')
+                self.s2t2s, _ = generator_func(self.g_s2t[:,:,:,:9], reuse=True, name='G_T2S')
+                self.t2s2t, _ = generator_func(self.g_t2s[:,:,:,:9], reuse=True, name='G_S2T')
     
-                self.summary['source_transferred'] = self.g_s2t[:,:,:,:3]                
-                self.summary['target_transferred'] = self.g_t2s[:,:,:,:3]
-                self.summary['back2source'] = self.s2t2s[:,:,:,:3]
-                self.summary['back2target'] = self.t2s2t[:,:,:,:3]
+                self.summary['source_transferred'] = self.g_s2t[:,:,:,:9]                
+                self.summary['target_transferred'] = self.g_t2s[:,:,:,:9]
+                self.summary['back2source'] = self.s2t2s[:,:,:,:9]
+                self.summary['back2target'] = self.t2s2t[:,:,:,:9]
         
             with tf.name_scope('discriminator'):
                 # Patch discriminator
-                self.s2t_fake = self.discriminator(self.g_s2t[:,:,:,:3], name='D_S2T')
-                self.t2s_fake = self.discriminator(self.g_t2s[:,:,:,:3], name='D_T2S')
+                self.s2t_fake = self.discriminator(self.g_s2t[:,:,:,:9], name='D_S2T')
+                self.t2s_fake = self.discriminator(self.g_t2s[:,:,:,:9], name='D_T2S')
     
                 self.target_real = self.discriminator(target, reuse=True, name='D_S2T')
                 self.source_real = self.discriminator(source, reuse=True, name='D_T2S')
@@ -62,18 +63,18 @@ class model():
         else:
             self.summary['source_image'] = source
 
-        with tf.name_scope('regression'):
+        with tf.name_scope('task'):
             if self.source_only:
                 self.end, self.cnn = self.task(self.summary['source_image'], measurements)
             else:
-                self.end = self.task(self.g_s2t[:,:,:,:3], measurements)  
+                self.end, _ = self.task(self.g_s2t[:,:,:,:9], measurements)  
                 if self.args.t2s_task:
                     self.t2s_end = self.task(self.g_t2s, measurements, private='t2s_private', reuse_shared=True)
 
-    def create_objective(self, steer, command):
+    def create_objective(self, steer, command, mode='FISHER'):
         if not self.source_only:
             with tf.name_scope('cyclic'):
-                if self.generator_out_channel == 4:
+                if self.generator_out_channel == 10:
                     self.s2t_cyclic_loss = losses.cyclic_loss(tf.concat([self.summary['source_image'], self.source_noise], 3), self.s2t2s)
                     self.t2s_cyclic_loss = losses.cyclic_loss(tf.concat([self.summary['target_image'], self.target_noise], 3), self.t2s2t)
                 else:

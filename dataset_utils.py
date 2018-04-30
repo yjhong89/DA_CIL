@@ -240,58 +240,61 @@ def da_cil(dataset_name, split_name, tfrecord_dir, batch_size, config=None):
     num_examples = sum(sum(1 for _ in tf.python_io.tf_record_iterator(path)) for path in tfrecord_path)
     tf.logging.info('%s_%s.tfrecord' % (dataset_name, split_name))
 
-    # Remove 'num_epoch'-> causes queues to incur Out of Range error after num_epoch
-    filename_queue = tf.train.string_input_producer(tfrecord_path)
-    reader = tf.TFRecordReader()
-
-    _, serialized_example = reader.read(filename_queue)
-
-    features = tf.parse_single_example(
-      serialized_example, features={
-        'image_raw': tf.FixedLenFeature([], tf.string),
-        'label/steer': tf.FixedLenFeature([], tf.string),
-        #'label/steer' : tf.FixedLenFeature([], tf.float32),
-        'measures/ang_z': tf.FixedLenFeature([], tf.float32),
-        'measures/linacc_x': tf.FixedLenFeature([], tf.float32),
-        'measures/linacc_y': tf.FixedLenFeature([], tf.float32),
-        'command' : tf.FixedLenFeature([], tf.string)})
-   
-    image = tf.decode_raw(features['image_raw'],tf.float32)
-    # steer is one hot string
-    label = tf.decode_raw(features['label/steer'], tf.float32)
-    #label = features['label/steer']
-    angz = features['measures/ang_z']
-    linx  = features['measures/linacc_x']
-    liny  = features['measures/linacc_y']
-    command = tf.decode_raw(features['command'],tf.float32)
-
-    print('='*10)
-    # tf.string must be notified its shape
-    command = tf.reshape(command,[3])
-    label = tf.reshape(label, [5])
-    #image = tf.reshape(image,[240,360,3])
-    image = tf.reshape(image, [240,360,9])
-
-    image /= 255.0
-    image = tf.image.convert_image_dtype(image, tf.float32)
-
-    if config.getboolean('config', 'augmentation'):
-        image1 = _augmentation(image[:,:,:3], config)
-        image2 = _augmentation(image[:,:,3:6], config)
-        image3 = _augmentation(image[:,:,6:9], config)
-
-    image = tf.concat([image1, image2, image3], axis=-1)
-
-    image = tf.clip_by_value(image, 0, 1.0)
-    image -= 0.5
-    image *= 2
-
-    images, labels, angzs, linxs, linys, commands = tf.train.shuffle_batch([image,label,angz,linx,liny,command],batch_size=batch_size, capacity=10*batch_size, num_threads=4, min_after_dequeue=batch_size)
-
-    angzs = tf.expand_dims(angzs, 1)
-    linxs = tf.expand_dims(linxs, 1)
-    linys = tf.expand_dims(linys, 1)
-    measures = tf.concat([angzs,linxs,linys], 1)
+    with tf.name_scope('read_tfrecord'):
+        # Remove 'num_epoch'-> causes queues to incur Out of Range error after num_epoch
+        filename_queue = tf.train.string_input_producer(tfrecord_path)
+        reader = tf.TFRecordReader()
+    
+        _, serialized_example = reader.read(filename_queue)
+    
+        features = tf.parse_single_example(
+          serialized_example, features={
+            'image_raw': tf.FixedLenFeature([], tf.string),
+            'label/steer': tf.FixedLenFeature([], tf.string),
+            #'label/steer' : tf.FixedLenFeature([], tf.float32),
+            'measures/ang_z': tf.FixedLenFeature([], tf.float32),
+            'measures/linacc_x': tf.FixedLenFeature([], tf.float32),
+            'measures/linacc_y': tf.FixedLenFeature([], tf.float32),
+            'command' : tf.FixedLenFeature([], tf.string)})
+       
+        image = tf.decode_raw(features['image_raw'],tf.float32)
+        # steer is one hot string
+        label = tf.decode_raw(features['label/steer'], tf.float32)
+        #label = features['label/steer']
+        angz = features['measures/ang_z']
+        linx  = features['measures/linacc_x']
+        liny  = features['measures/linacc_y']
+        command = tf.decode_raw(features['command'],tf.float32)
+    
+        print('='*10)
+        # tf.string must be notified its shape
+        command = tf.reshape(command,[3])
+        label = tf.reshape(label, [5])
+        #image = tf.reshape(image,[240,360,3])
+        image = tf.reshape(image, [240,360,9])
+    
+        image /= 255.0
+        image = tf.image.convert_image_dtype(image, tf.float32)
+    
+        if config.getboolean('config', 'augmentation'):
+            image1 = _augmentation(image[:,:,:3], config)
+            image2 = _augmentation(image[:,:,3:6], config)
+            image3 = _augmentation(image[:,:,6:9], config)
+    
+        image = tf.concat([image1, image2, image3], axis=-1)
+    
+        image = tf.clip_by_value(image, 0, 1.0)
+        image -= 0.5
+        image *= 2
+    
+        images, labels, angzs, linxs, linys, commands = tf.train.shuffle_batch([image,label,angz,linx,liny,command],batch_size=batch_size, capacity=10*batch_size, num_threads=4, min_after_dequeue=batch_size)
+    
+        images = tf.image.resize_images(images, [256, 256])
+    
+        angzs = tf.expand_dims(angzs, 1)
+        linxs = tf.expand_dims(linxs, 1)
+        linys = tf.expand_dims(linys, 1)
+        measures = tf.concat([angzs,linxs,linys], 1)
 
     return images, labels, measures, commands
 
