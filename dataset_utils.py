@@ -238,7 +238,7 @@ def da_cil(dataset_name, split_name, tfrecord_dir, batch_size, config=None):
         tfrecord_path = [tfrecord_path]
 
     num_examples = sum(sum(1 for _ in tf.python_io.tf_record_iterator(path)) for path in tfrecord_path)
-    tf.logging.info('%s_%s.tfrecord' % (dataset_name, split_name))
+    tf.logging.info('%s_%s.tfrecord: %d examples' % (dataset_name, split_name, num_examples))
 
     with tf.name_scope('read_tfrecord'):
         # Remove 'num_epoch'-> causes queues to incur Out of Range error after num_epoch

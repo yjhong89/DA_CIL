@@ -80,6 +80,7 @@ def train(sess, args, config):
 
     get_batches = getattr(dataset_utils, model_type)
 
+    tf.logging.info('Training %s' % model_type)
     if model_type == 'da_cil':
         with tf.name_scope(model_type + '_batches'):
             source_image_batch, source_label_batch, source_measure_batch, source_command_batch = get_batches('source', 'train', tfrecord_dir, batch_size=args.batch_size, config=config)
@@ -107,7 +108,6 @@ def train(sess, args, config):
                 da_model.summary['discriminator_loss'] = discriminator_loss
 
     elif model_type == 'pixel_da':
-        tf.logging.info('Training %s' % model_type)
         with tf.name_scope(model_type + '_batches'):
             source_image_batch, source_label_batch = get_batches('source', 'train', tfrecord_dir, batch_size=args.batch_size, config=config)
             mask_image_batch = source_image_batch[:,:,:,3]

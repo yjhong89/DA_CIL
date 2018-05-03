@@ -19,6 +19,8 @@ class model():
         self.generator = modules.generator(generator_channel, config, self.args)
         self.discriminator = modules.discriminator(discriminator_channel, group_size=self.args.batch_size)
         
+        self.style_weights = config.getlist('pixel_da', 'style_weights')
+
         self.transferred_classifier = modules.task_classifier(classifier_channel, num_classes=3, training=self.args.training) 
 
         self.transferred_task_weight = config.getfloat(model_name, 'task_weight')
@@ -51,11 +53,11 @@ class model():
 
         with tf.name_scope('discriminator'):
             # Patch discriminator
-            self.s2t_fake = self.discriminator(self.g_s2t[:,:,:,:3], name='D_S2T')
-            self.t2s_fake = self.discriminator(self.g_t2s[:,:,:,:3], name='D_T2S')
+            self.s2t_fake, self.s2t_fake_activations = self.discriminator(self.g_s2t[:,:,:,:3], name='D_S2T')
+            self.t2s_fake, self.t2s_fake_activations = self.discriminator(self.g_t2s[:,:,:,:3], name='D_T2S')
 
-            self.target_real = self.discriminator(target, reuse=True, name='D_S2T')
-            self.source_real = self.discriminator(source, reuse=True, name='D_T2S')
+            self.target_real, self.target_real_activations = self.discriminator(target, reuse=True, name='D_S2T')
+            self.source_real, self.source_real_activations = self.discriminator(source, reuse=True, name='D_T2S')
 
         with tf.name_scope('classifier'):
             self.head_logits, self.lateral_logits = self.transferred_classifier(self.g_s2t, reuse_private=False, reuse_shared=False, shared='transferred_shared', private='transferred_private')  
@@ -87,11 +89,17 @@ class model():
             self.summary['s2t_d_loss'] = self.s2t_d_loss
             self.summary['t2s_d_loss'] = self.t2s_d_loss            
 
+        with tf.name_scope('style'):
+            self.s2t_style_loss = losses.style_loss(self.s2t_fake_activations, self.target_real_activations, self.style_weights)
+            self.t2s_style_loss = losses.style_loss(self.t2s_fake_activations, self.source_real_activations, self.style_weights)
+            self.summary['s2t_style_loss'] = self.s2t_style_loss
+            self.summary['t2s_style_loss'] = self.t2s_style_loss
+
         with tf.name_scope('task'):
             self.transferred_task_loss = losses.task_classifier_pixel_da_loss(head_labels, lateral_labels, self.head_logits, self.lateral_logits)
             self.summary['classification_loss'] = self.transferred_task_loss
             if self.args.t2s_task:
                 self.t2s_task_loss = losses.task_classifier_pixel_da_loss(head_labels, lateral_labels, self.t2s_head_logits, self.t2s_lateral_logits)
-                self.summary['t2s_task_loss'] = self.t2s_task_loss
+                self.summary['t2s_classification_loss'] = self.t2s_task_loss
        
 
