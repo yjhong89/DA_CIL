@@ -8,7 +8,7 @@ import evaluation_pixel_da
 import evaluation_source_only
 
 os.environ['CUDA_DEVICE_ORDER'] = 'PCI_BUS_ID'
-os.environ['CUDA_VISIBLE_DEVICES'] = '0'
+os.environ['CUDA_VISIBLE_DEVICES'] = '1'
 
 
 def main():
@@ -16,16 +16,16 @@ def main():
     parser.add_argument('-d', '--delete', action='store_true')
     parser.add_argument('-l', '--log', action='store_true')
     parser.add_argument('--config', default='config.ini')
-    parser.add_argument('--batch_size', type=int, default=16)
+    parser.add_argument('--batch_size', type=int, default=8)
     parser.add_argument('--clip_norm', type=float, default=5.0)
     parser.add_argument('--optimizer', type=str, default='adam')
     parser.add_argument('--training', type=utils.str2bool, default='t')
     parser.add_argument('--max_iter', type=int, default=400000)
-    parser.add_argument('--t2s_task', type=utils.str2bool, default='f')
+    parser.add_argument('--t2s_task', type=utils.str2bool, default='t')
     parser.add_argument('--pixel_norm', type=utils.str2bool, default='t')
-    parser.add_argument('--learning_rate', type=float, default=0.0001)
+    parser.add_argument('--learning_rate', type=float, default=0.0002)
     parser.add_argument('--lr_decay', type=utils.str2bool, default='n')
-    parser.add_argument('--save_interval', type=int, default=10)
+    parser.add_argument('--save_interval', type=int, default=100)
     parser.add_argument('--summary_interval', type=int, default=50)
     parser.add_argument('--load_ckpt', type=utils.str2bool, default='t')
     parser.add_argument('--num_eval', type=int, default=1)

@@ -50,17 +50,20 @@ def train(sess, args, config):
     adversarial_mode = config.get('config', 'mode')
     whether_noise = config.getboolean('generator', 'noise')
     noise_dim = config.getint('generator', 'noise_dim')
-    source_only = config.getboolean('config', 'source_only')
 
+    source_only = config.getboolean(model_type, 'source_only')
     s2t_adversarial_weight = config.getfloat(model_type, 's2t_adversarial_weight')
     t2s_adversarial_weight = config.getfloat(model_type, 't2s_adversarial_weight')
     s2t_cyclic_weight = config.getfloat(model_type, 's2t_cyclic_weight')
     t2s_cyclic_weight = config.getfloat(model_type, 't2s_cyclic_weight')
     s2t_task_weight = config.getfloat(model_type, 'task_weight')
     t2s_task_weight = config.getfloat(model_type, 't2s_task_weight')
+    s2t_style_weight = config.getfloat(model_type, 's2t_style_weight')
+    t2s_style_weight = config.getfloat(model_type, 't2s_style_weight')
     discriminator_step = config.getint(model_type, 'discriminator_step')
     generator_step = config.getint(model_type, 'generator_step')
-    save_dir = os.path.join(log_dir, utils.make_savedir(config))
+#    save_dir = os.path.join(log_dir, utils.make_savedir(config))
+    save_dir = os.path.join(log_dir, config.get('config', 'savedir'))
 
     if args.delete and os.path.exists(save_dir):
         shutil.rmtree(save_dir)
@@ -98,8 +101,9 @@ def train(sess, args, config):
                 da_model.summary['generator_loss'] = generator_loss
 
                 discriminator_loss = s2t_adversarial_weight * da_model.s2t_d_loss + t2s_adversarial_weight * da_model.t2s_d_loss + s2t_task_weight * da_model.classification_loss 
+                discriminator_loss += s2t_style_weight * da_model.s2t_style_loss + t2s_style_weight * da_model.t2s_style_loss
                 if args.t2s_task:
-                    discriminator_loss += t2s_task_weight * da_model.t2s_task_loss 
+                    discriminator_loss += t2s_task_weight * da_model.t2s_classification_loss 
                 da_model.summary['discriminator_loss'] = discriminator_loss
 
     elif model_type == 'pixel_da':
@@ -108,7 +112,7 @@ def train(sess, args, config):
             source_image_batch, source_label_batch = get_batches('source', 'train', tfrecord_dir, batch_size=args.batch_size, config=config)
             mask_image_batch = source_image_batch[:,:,:,3]
             source_image_batch = source_image_batch[:,:,:,:3]
-            if config.getboolean('config', 'input_mask'):
+            if config.getboolean(model_type, 'input_mask'):
                 mask_images = tf.to_float(tf.greater(mask_image_batch, 0.99))
                 source_image_batch = tf.multiply(source_image_batch, tf.tile(tf.expand_dims(mask_images, 3), [1,1,1,3])) 
                 

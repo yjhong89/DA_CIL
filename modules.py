@@ -19,10 +19,11 @@ class generator(object):
         # Add latent noise vector to image input
         if self.config.getboolean(self.module_name, 'noise'):
             tf.logging.info('Using random noise')
-            noise = tf.random_uniform(shape=[self.args.batch_size, self.config.getint(self.module_name, 'noise_dim')], minval=-1, maxval=1, dtype=tf.float32, name='random_noise')
+            if self.config.get('config', 'experiment') == 'da_cil' and self.config.getboolean(self.module_name, 'share_all_image'):
+                noise = tf.random_uniform(shape=[self.args.batch_size*3, self.config.getint(self.module_name, 'noise_dim')], minval=-1, maxval=1, dtype=tf.float32, name='random_noise')
+            else:
+                noise = tf.random_uniform(shape=[self.args.batch_size, self.config.getint(self.module_name, 'noise_dim')], minval=-1, maxval=1, dtype=tf.float32, name='random_noise')
             self.latent_vars['noise'] = noise
-        elif (self.out_channel != 3):
-            raise ValueError('No random noise injection')
 
     def normalize(self):
         return op._pixel_norm if self.args.pixel_norm else op._instance_norm
@@ -124,7 +125,7 @@ class generator(object):
                         # 128,128
                         layer_index += 1
                         d8 = op.transpose_conv2d(tf.nn.relu(d7), out_channel=self.out_channel, name='transpose_conv2d_%d'%layer_index, normalization=False, activation=tf.nn.tanh)
-                    # 256,256
+                        # 256,256
 
         return d8, noise_channel
 
@@ -181,7 +182,6 @@ class generator(object):
                 #x = tf.pad(x, [[0,0],[3,3],[3,3],[0,0]], 'REFLECT')
                 #x = op.conv2d(x, out_channel=3, filter_size=7, stride=1, padding='VALID', name='transpose_conv2d_%d'%layer_index, normalization=None, activation=tf.nn.tanh)
                 x = op.transpose_conv2d(x, out_channel=self.out_channel, filter_size=7, stride=1, name='transpose_conv2d_%d'%layer_index, normalization=None, activation=tf.nn.tanh)
-                 
 
         return x
 
@@ -266,7 +266,7 @@ def project_latent_vars(shape, latent_vars, combine_method, name):
 
 
 class discriminator(object):
-    def __init__(self, channel, group_size=8):
+    def __init__(self, channel, group_size=1):
         self.channel = channel
         self.module_name = 'discriminator'
         self.group_size = group_size
@@ -276,8 +276,10 @@ class discriminator(object):
         # regular GAN discriminaotr maps image to a single scalar while patchGAN maps image to an NXN array of output X
         # X_ij signifies patch_ij in input image is real or fake. -> so 70x70 patches in input images
         # equivalent manually chopped up the image into 70x70 patch, run a regular discriminator
-    def __call__(self, x, name, patch=True, reuse=False, dropout_prob=0.35, training=True):
+    def __call__(self, x, name, patch=True, reuse=False, dropout_prob=0.7, training=True):
         layer_index = 0
+        activations = list()
+
         if training:
             self.dropout_prob = dropout_prob
         else:
@@ -288,26 +290,38 @@ class discriminator(object):
                 def add_noise(hidden, scope_num=None):
                     if scope_num:
                         hidden = slim.dropout(hidden, self.dropout_prob, is_training=training, scope='dropout_%s' % scope_num)
-                    return hidden + tf.random_normal(hidden.shape.as_list(), mean=0, stddev=0.2)
+                    return hidden + tf.random_normal(hidden.shape.as_list(), mean=0, stddev=0.1)
 
 
                 if reuse:
                     tf.get_variable_scope().reuse_variables()
     
                 # From cycleGAN, do not use instance Norm for the first C64 layer
+                # 256,256
                 x = op.conv2d(x, out_channel=self.channel, normalization=False, name='conv2d_%d'%layer_index)
                 x = add_noise(x, layer_index)
                 layer_index += 1
+                # 128,128
                 x = op.conv2d(x, out_channel=self.channel*2, name='conv2d_%d'%layer_index)
+                activations.append(x)
                 x = add_noise(x, layer_index)
                 layer_index += 1
+                # 64,64
                 x = op.conv2d(x, out_channel=self.channel*4, name='conv2d_%d'%layer_index)
+                activations.append(x)
                 x = add_noise(x, layer_index)
                 layer_index += 1
+                # 32,32
+                x = op.conv2d(x, out_channel=self.channel*8, name='conv2d_%d'%layer_index)
+                activations.append(x)
+                layer_index += 1
+                
                 if self.group_size > 1:
                     x = self.minibatch_discrimination(x, self.group_size)
-                x = op.conv2d(x, out_channel=self.channel*8, stride=1, name='conv2d_%d'%layer_index)
-                x = add_noise(x, layer_index)
+
+                # 16,16
+                x = op.conv2d(x, out_channel=self.channel*16, stride=1, name='conv2d_%d'%layer_index)
+                activations.append(x)
                 layer_index += 1
 
                 if patch:
@@ -317,7 +331,8 @@ class discriminator(object):
                     x = slim.flatten(x)
                     x = op.fc(x, 1, activation=None, dropout=False, name='fc')
 
-        return x
+        # activations acter RELU
+        return x, activations
 
     # From progressive GAN
     def minibatch_discrimination(self, x, group_size=4):
@@ -346,7 +361,7 @@ class discriminator(object):
 
 
 class task(object):
-    def __init__(self, channel, image_fc, measurement_fc, branch_fc, training=True, name='task_regression'):
+    def __init__(self, channel, image_fc, measurement_fc, branch_fc, training=True, name='task'):
         self.channel = channel
         self.name = name
         self.image_fc = image_fc
@@ -363,7 +378,7 @@ class task(object):
         self.module_name = 'discriminator'
 
 
-    def __call__(self, image, measurements, reuse_private=False, reuse_shared=False, private='private', shared='shared_task', mode='RESNET', reuse=False):
+    def __call__(self, image, measurements, reuse_private=False, reuse_shared=False, private='private', shared='shared_task', reuse=False):
         image_layer_index = 0
         fc_index = 0
         
@@ -376,80 +391,57 @@ class task(object):
                     tf.get_variable_scope().reuse_variables()
 
                 with tf.variable_scope('image_module'):
-                    if mode == 'RESNET':
-                        with tf.variable_scope(private, reuse=reuse_private):
-                            # [240, 360]
-                            x = op.conv2d(image, out_channel=self.channel, filter_size=7, stride=2, normalization=op._batch_norm, activation=tf.nn.relu, name='conv2d_%d'%image_layer_index)
+                    with tf.variable_scope(private, reuse=reuse_private):
+                        # [240, 360]
+                        x = op.conv2d(image, out_channel=self.channel, filter_size=7, stride=2, normalization=op._batch_norm, activation=tf.nn.relu, name='conv2d_%d'%image_layer_index)
                         image_layer_index += 1
-    
-                        with tf.variable_scope(shared, reuse_shared):
-                            # [120, 180]
-                            x, image_layer_index = op.residual_block(x, out_dim=self.channel, layer_index=image_layer_index, normalization=op._batch_norm, downsample=False, training=self.training)
-                            x, image_layer_index = op.residual_block(x, out_dim=self.channel, layer_index=image_layer_index, normalization=op._batch_norm, downsample=False, training=self.training)
-                            x, image_layer_index = op.residual_block(x, out_dim=self.channel*2, layer_index=image_layer_index, normalization=op._batch_norm, downsample=True, training=self.training)
-                            x, image_layer_index = op.residual_block(x, out_dim=self.channel*2, layer_index=image_layer_index, normalization=op._batch_norm, downsample=False, training=self.training)
-                            # [60, 90]
-                            x, image_layer_index = op.residual_block(x, out_dim=self.channel*4, layer_index=image_layer_index, normalization=op._batch_norm, downsample=True, training=self.training)
-                            x, image_layer_index = op.residual_block(x, out_dim=self.channel*4, layer_index=image_layer_index, normalization=op._batch_norm, downsample=False, training=self.training)
-                            # [30, 45]
-                            x, image_layer_index = op.residual_block(x, out_dim=self.channel*8, layer_index=image_layer_index, normalization=op._batch_norm, downsample=True, training=self.training)
-                            x, image_layer_index = op.residual_block(x, out_dim=self.channel*8, layer_index=image_layer_index, normalization=op._batch_norm, downsample=False, training=self.training)
-               
-                    else:
-                        with tf.variable_scope(private, reuse=reuse_private):
-                            x = op.conv2d(image, out_channel=self.channel, filter_size=5, stride=2, normalization=False, activation=tf.nn.relu, name='conv2d_%d'%image_layer_index)
-                            image_layer_index += 1
-                        with tf.variable_scope(shared, reuse_shared):
-                            x = op.conv2d(x, out_channel=self.channel, filter_size=3, stride=1, activation=tf.nn.relu, name='conv2d_%d'%image_layer_index)
-                            image_layer_index += 1
-        
-                            x = op.conv2d(x, out_channel=self.channel*2, filter_size=3, stride=2, activation=tf.nn.relu, name='conv2d_%d'%image_layer_index)
-                            image_layer_index += 1
-                            x = op.conv2d(x, out_channel=self.channel*2, filter_size=3, stride=1, activation=tf.nn.relu, name='conv2d_%d'%image_layer_index)
-                            image_layer_index += 1
-    
-                            x = op.conv2d(x, out_channel=self.channel*4, filter_size=3, stride=2, activation=tf.nn.relu, name='conv2d_%d'%image_layer_index)
-                            image_layer_index += 1
-                            x = op.conv2d(x, out_channel=self.channel*4, filter_size=3, stride=1, activation=tf.nn.relu, name='conv2d_%d'%image_layer_index) 
-                            image_layer_index += 1
-                            x = op.conv2d(x, out_channel=self.channel*8, filter_size=3, stride=1, activation=tf.nn.relu, name='conv2d_%d'%image_layer_index)
-                            image_layer_index += 1
-                            x = op.conv2d(x, out_channel=self.channel*8, filter_size=3, stride=1, activation=tf.nn.relu, name='conv2d_%d'%image_layer_index)
-                            image_layer_index += 1
-   
-                    #x_shape = x.get_shape().as_list()
-                    # Fully connected layer
-                    #flatten = tf.reshape(x, [-1, np.prod(x_shape[1:])])
-                    x = op.global_average_pooling(x)
 
-                    #x1 = tf.layers.dense(flatten, self.image_fc, activation=tf.nn.relu, kernel_regularizer=tf.contrib.layers.l2_regularizer(scale=0.1))
-                    #x1 = op.fc(flatten, self.image_fc, dropout=False, dropout_ratio=self.dropout[fc_index], name='fc_%d'%fc_index)
-                    #fc_index += 1
-                    #x = op.fc(x1, self.image_fc, dropout_ratio=self.dropout[fc_index], name='fc_%d'%fc_index)
-                    #fc_index += 1
-    
-                with tf.variable_scope('measurement_module'):
-                    y = op.fc(measurements, self.measurement_fc, dropout_ratio=self.dropout[fc_index], name='fc_%d'%fc_index)
-                    fc_index += 1    
-                    y = op.fc(y, self.measurement_fc, dropout_ratio=self.dropout[fc_index], name='fc_%d'%fc_index)
-                    fc_index += 1
-                    
-                with tf.variable_scope('joint'):
-                    #joint = tf.concat([x,y], axis=-1, name='joint_representation')
-                    joint = tf.concat([x], axis=-1, name='joint_representation')
-                    #joint = op.fc(joint, self.image_fc, dropout_ratio=self.dropout[fc_index], name='fc_%d'%fc_index)
-                    #fc_index += 1
+                    with tf.variable_scope(shared, reuse=reuse_shared):
+                        # [120, 180]
+                        x, image_layer_index = op.residual_block(x, out_dim=self.channel, layer_index=image_layer_index, normalization=op._batch_norm, downsample=False, training=self.training)
+                        x, image_layer_index = op.residual_block(x, out_dim=self.channel, layer_index=image_layer_index, normalization=op._batch_norm, downsample=False, training=self.training)
+                        x, image_layer_index = op.residual_block(x, out_dim=self.channel*2, layer_index=image_layer_index, normalization=op._batch_norm, downsample=True, training=self.training)
+                        x, image_layer_index = op.residual_block(x, out_dim=self.channel*2, layer_index=image_layer_index, normalization=op._batch_norm, downsample=False, training=self.training)
+                        # [60, 90]
+                        x, image_layer_index = op.residual_block(x, out_dim=self.channel*4, layer_index=image_layer_index, normalization=op._batch_norm, downsample=True, training=self.training)
+                        x, image_layer_index = op.residual_block(x, out_dim=self.channel*4, layer_index=image_layer_index, normalization=op._batch_norm, downsample=False, training=self.training)
+                        # [30, 45]
+                        x, image_layer_index = op.residual_block(x, out_dim=self.channel*8, layer_index=image_layer_index, normalization=op._batch_norm, downsample=True, training=self.training)
+                        x, image_layer_index = op.residual_block(x, out_dim=self.channel*8, layer_index=image_layer_index, normalization=op._batch_norm, downsample=False, training=self.training)
+           
+                        #x_shape = x.get_shape().as_list()
+                        # Fully connected layer
+                        #flatten = tf.reshape(x, [-1, np.prod(x_shape[1:])])
+                        x = op.global_average_pooling(x)
+ 
+                        #x1 = tf.layers.dense(flatten, self.image_fc, activation=tf.nn.relu, kernel_regularizer=tf.contrib.layers.l2_regularizer(scale=0.1))
+                        #x1 = op.fc(flatten, self.image_fc, dropout=False, dropout_ratio=self.dropout[fc_index], name='fc_%d'%fc_index)
+                        #fc_index += 1
+                        #x = op.fc(x1, self.image_fc, dropout_ratio=self.dropout[fc_index], name='fc_%d'%fc_index)
+                        #fc_index += 1
         
-                for i in range(self.num_commands):
-                    with tf.variable_scope('branch_%d'%i):
-                        #branch_output = op.fc(joint, dropout=False, self.branch_fc, dropout_ratio=self.dropout[fc_index], name='fc_%d'%fc_index)
-                        #fc_index += 1
-                        #branch_output = op.fc(branch_output, self.branch_fc, dropout_ratio=self.dropout[fc_index], name='fc_%d'%fc_index)
-                        #fc_index += 1
-                        #branch_output = op.fc(branch_output, 5, dropout=False, activation=None, name='fc_%d'%fc_index)
-                        #branch_output = tf.layers.dense(joint, 5, kernel_regularizer=tf.contrib.layers.l2_regularizer(scale=0.1))
-                        branch_output = op.fc(joint, 5, dropout=False, activation=None, name='fc_%d'%fc_index)
-                        branches.append(branch_output)
+                        with tf.variable_scope('measurement_module'):
+                            y = op.fc(measurements, self.measurement_fc, dropout_ratio=self.dropout[fc_index], name='fc_%d'%fc_index)
+                            fc_index += 1    
+                            y = op.fc(y, self.measurement_fc, dropout_ratio=self.dropout[fc_index], name='fc_%d'%fc_index)
+                            fc_index += 1
+                            
+                        with tf.variable_scope('joint'):
+                            joint = tf.concat([x,y], axis=-1, name='joint_representation')
+                            #joint = tf.concat([x], axis=-1, name='joint_representation')
+                            #joint = op.fc(joint, self.image_fc, dropout_ratio=self.dropout[fc_index], name='fc_%d'%fc_index)
+                            #fc_index += 1
+                
+                        for i in range(self.num_commands):
+                            with tf.variable_scope('branch_%d'%i):
+                                #branch_output = op.fc(joint, dropout=False, self.branch_fc, dropout_ratio=self.dropout[fc_index], name='fc_%d'%fc_index)
+                                #fc_index += 1
+                                #branch_output = op.fc(branch_output, self.branch_fc, dropout_ratio=self.dropout[fc_index], name='fc_%d'%fc_index)
+                                #fc_index += 1
+                                #branch_output = op.fc(branch_output, 5, dropout=False, activation=None, name='fc_%d'%fc_index)
+                                #branch_output = tf.layers.dense(joint, 5, kernel_regularizer=tf.contrib.layers.l2_regularizer(scale=0.1))
+                                branch_output = op.fc(joint, 5, dropout=False, activation=None, name='fc_%d'%fc_index)
+                                branches.append(branch_output)
     
         return branches, x
         

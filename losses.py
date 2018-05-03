@@ -1,5 +1,7 @@
 import tensorflow as tf
 import tensorflow.contrib.slim as slim
+import numpy as np
+
 
 
 def cyclic_loss(origin, back2origin):
@@ -93,6 +95,36 @@ def adversarial_loss(real_sample, fake_sample, real_logits, fake_logits, discrim
         raise ValueError('%s is not supported' % mode)
     
     return g_loss, d_loss
+
+def style_loss(fake_activations, real_activations, weights):
+    assert len(fake_activations) == len(real_activations) == len(weights)   
+
+    total_loss = 0
+ 
+    # [channel * channel] matrix
+    def gram_mtx(tensor):
+        shape = tensor.get_shape().as_list()
+        
+        channel_vector = tf.reshape(tensor, [-1, shape[3]])
+        gram = tf.matmul(tf.transpose(channel_vector), channel_vector)
+
+        N = np.prod(shape[1:])
+        
+        return gram, N, shape[0]
+
+    for i in range(len(fake_activations)):
+        fake_gram, fake_N, fake_batch_num = gram_mtx(fake_activations[i])
+        real_gram, real_N, real_batch_num = gram_mtx(real_activations[i])
+        
+        assert fake_N == real_N
+        assert fake_batch_num == real_batch_num
+
+        loss = (1.0 / ((fake_batch_num**2) * (fake_N**2))) * tf.reduce_sum(tf.square(fake_gram - real_gram))
+
+        total_loss += float(weights[i]) * loss
+
+    return total_loss
+
    
 def task_regression_loss(steer, command, logits):
     assert isinstance(logits, list)
@@ -133,7 +165,8 @@ def task_classifier_loss(steer_label, command, logits, num_classes=5):
     classification_loss = tf.reduce_mean(command * classification)
     #classification_loss = tf.reduce_mean(classifier_output_list[1])
     
-    loss = classification_loss# + tf.reduce_sum(tf.get_collection(tf.GraphKeys.REGULARIZATION_LOSSES))
+    loss = classification_loss
+    #loss += tf.reduce_sum(tf.get_collection(tf.GraphKeys.REGULARIZATION_LOSSES))
     
     return loss, classification
 

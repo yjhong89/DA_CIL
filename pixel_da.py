@@ -17,7 +17,7 @@ class model():
         self.generator_type = config.get('generator', 'type')
         self.generator_out_channel = config.getint('generator', 'out_channel')
         self.generator = modules.generator(generator_channel, config, self.args)
-        self.discriminator = modules.discriminator(discriminator_channel)
+        self.discriminator = modules.discriminator(discriminator_channel, group_size=self.args.batch_size)
         
         self.transferred_classifier = modules.task_classifier(classifier_channel, num_classes=3, training=self.args.training) 
 
@@ -69,12 +69,8 @@ class model():
 
     def create_objective(self, head_labels, lateral_labels, mode='LS'):
         with tf.name_scope('cyclic'):
-            if self.generator_out_channel == 4:
-                self.s2t_cyclic_loss = losses.cyclic_loss(tf.concat([self.summary['source_image'], self.source_noise], 3), self.s2t2s)
-                self.t2s_cyclic_loss = losses.cyclic_loss(tf.concat([self.summary['target_image'], self.target_noise], 3), self.t2s2t)
-            else:
-                self.s2t_cyclic_loss = losses.cyclic_loss(self.summary['source_image'], self.s2t2s)
-                self.t2s_cyclic_loss = losses.cyclic_loss(self.summary['target_image'], self.t2s2t)
+            self.s2t_cyclic_loss = losses.cyclic_loss(self.summary['source_image'], self.s2t2s)
+            self.t2s_cyclic_loss = losses.cyclic_loss(self.summary['target_image'], self.t2s2t)
                 
             self.summary['cyclic_loss'] = self.s2t_cyclic_loss + self.t2s_cyclic_loss
         
@@ -93,7 +89,7 @@ class model():
 
         with tf.name_scope('task'):
             self.transferred_task_loss = losses.task_classifier_pixel_da_loss(head_labels, lateral_labels, self.head_logits, self.lateral_logits)
-            self.summary['task_loss'] = self.transferred_task_loss
+            self.summary['classification_loss'] = self.transferred_task_loss
             if self.args.t2s_task:
                 self.t2s_task_loss = losses.task_classifier_pixel_da_loss(head_labels, lateral_labels, self.t2s_head_logits, self.t2s_lateral_logits)
                 self.summary['t2s_task_loss'] = self.t2s_task_loss
