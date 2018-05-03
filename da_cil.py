@@ -107,8 +107,10 @@ class model():
                     self.t2s_cyclic_loss = losses.cyclic_loss(self.target_concat, self.t2s2t)
                     
 
-                    self.summary['cyclic_loss'] = self.s2t_cyclic_loss + self.t2s_cyclic_loss
-            
+                self.summary['source_cyclic_loss'] = self.s2t_cyclic_loss
+                self.summary['target_cyclic_loss'] = self.t2s_cclic_loss
+                
+                    
             # Wasserstein with gradient-penalty
             with tf.name_scope('adversarial'):
                 if mode == 'FISHER':

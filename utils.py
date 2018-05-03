@@ -61,7 +61,8 @@ def summarize(summary_set, t2s_option, source_only=False):
         return tf.summary.merge([task_loss_summary, source_image1_summary, source_image2_summary, source_image3_summary])
 
     # Loss part
-    cyclic_summary = tf.summary.scalar('cyclic_loss', summary_set['cyclic_loss'])
+    cyclic_summary = tf.summary.scalar('source_cyclic_loss', summary_set['source_cyclic_loss'])
+    cyclic_summary = tf.summary.scalar('target_cyclic_loss', summary_set['target_cyclic_loss'])
     s2t_g_loss_summary = tf.summary.scalar('s2t_g_loss', summary_set['s2t_g_loss'])
     t2s_g_loss_summary = tf.summary.scalar('t2s_g_loss', summary_set['t2s_g_loss'])
     s2t_style_loss_summary = tf.summary.scalar('s2t_style_loss', summary_set['s2t_style_loss'])
