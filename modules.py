@@ -183,7 +183,7 @@ class generator(object):
                 #x = op.conv2d(x, out_channel=3, filter_size=7, stride=1, padding='VALID', name='transpose_conv2d_%d'%layer_index, normalization=None, activation=tf.nn.tanh)
                 x = op.transpose_conv2d(x, out_channel=self.out_channel, filter_size=7, stride=1, name='transpose_conv2d_%d'%layer_index, normalization=None, activation=tf.nn.tanh)
 
-        return x
+        return x, noise_channel
 
     # Justin Johnson`s model with 9 blocks
     def generator_resnet(self, x, name, reuse=False):

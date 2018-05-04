@@ -266,7 +266,6 @@ def da_cil(dataset_name, split_name, tfrecord_dir, batch_size, config=None):
         liny  = features['measures/linacc_y']
         command = tf.decode_raw(features['command'],tf.float32)
     
-        print('='*10)
         # tf.string must be notified its shape
         command = tf.reshape(command,[3])
         label = tf.reshape(label, [5])
@@ -288,8 +287,13 @@ def da_cil(dataset_name, split_name, tfrecord_dir, batch_size, config=None):
         image *= 2
     
         images, labels, angzs, linxs, linys, commands = tf.train.shuffle_batch([image,label,angz,linx,liny,command],batch_size=batch_size, capacity=10*batch_size, num_threads=4, min_after_dequeue=batch_size)
-    
-        images = tf.image.resize_images(images, [256, 256])
+   
+        generator_type = config.get('generator', 'type')
+        if generator_type == 'UNET':
+            images = tf.image.resize_images(images, [256, 256])
+        else:
+            images = tf.image.resize_images(images, [96, 96])
+        
     
         angzs = tf.expand_dims(angzs, 1)
         linxs = tf.expand_dims(linxs, 1)
