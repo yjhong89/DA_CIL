@@ -8,14 +8,15 @@ def cyclic_loss(origin, back2origin):
     return tf.reduce_mean(tf.abs(origin-back2origin))
     #return tf.reduce_mean(tf.reduce_sum(tf.abs(origin - back2origin), [1,2,3]))
 
-def adversarial_loss(real_sample, fake_sample, real_logits, fake_logits, discriminator, mode='WGP', discriminator_name='D_S2T', gp_lambda=10, rho=1e-5):
+def adversarial_loss(real_sample, fake_sample, real_logits, fake_logits, discriminator, mode='WGP', discriminator_name='D_S2T', gp_lambda=10, rho=1e-5, patch=True):
     def gp(real, fake, name):
         batch_size, _,_,_ = real.get_shape().as_list()
         # Get different epsilon for each samples in a batch
         epsilon = tf.random_uniform([batch_size, 1, 1, 1], maxval=1.0)
         x_hat = epsilon * real + (1 - epsilon) * fake
         # 70x70 patch GAN, [batch size, 12, 20, 1]
-        discriminator_logits = discriminator(x_hat, reuse=True, name=name)
+        tf.logging.info('Gradient penalty of %s' % name)
+        discriminator_logits, _ = discriminator(x_hat, patch=patch, reuse=True, name=name)
         d_logits = tf.reshape(discriminator_logits, [batch_size, -1])
         _, num_cols = d_logits.get_shape().as_list()
         '''
@@ -96,6 +97,7 @@ def adversarial_loss(real_sample, fake_sample, real_logits, fake_logits, discrim
     return g_loss, d_loss
 
 def style_loss(fake_activations, real_activations, weights):
+    
     assert len(fake_activations) == len(real_activations) == len(weights)   
 
     total_loss = 0

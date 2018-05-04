@@ -94,7 +94,6 @@ class generator(object):
                     if att:
                         d5 = op.transpose_conv2d(tf.nn.relu(d4), out_channel=self.channel*4, name='transpose_conv2d_%d'%layer_index, activation=False, normalization=normalize_func)
                         e3 = op.attention_gate(e3, d5, self.channel*4, layer_index, normalization=normalize_func)
-                        print(d5.get_shape().as_list())
                         d5 = tf.concat([d5, e3], axis=3)
                         # 32,32
                         layer_index += 1
@@ -112,6 +111,7 @@ class generator(object):
                         # 256,256
 
                     else:
+                        tf.logging.info('No attention for %s' % name)
                         d5 = op.transpose_conv2d(tf.nn.relu(d4), out_channel=self.channel*4, name='transpose_conv2d_%d'%layer_index, activation=False, normalization=normalize_func)
                         d5 = tf.concat([d5, e3], axis=3)
                         # 32,32
@@ -276,7 +276,7 @@ class discriminator(object):
         # regular GAN discriminaotr maps image to a single scalar while patchGAN maps image to an NXN array of output X
         # X_ij signifies patch_ij in input image is real or fake. -> so 70x70 patches in input images
         # equivalent manually chopped up the image into 70x70 patch, run a regular discriminator
-    def __call__(self, x, name, patch=True, reuse=False, dropout_prob=0.7, training=True):
+    def __call__(self, x, name, patch=False, reuse=False, dropout_prob=0.7, training=True):
         layer_index = 0
         activations = list()
 
@@ -320,14 +320,18 @@ class discriminator(object):
                     x = self.minibatch_discrimination(x, self.group_size)
 
                 # 16,16
-                x = op.conv2d(x, out_channel=self.channel*16, stride=1, name='conv2d_%d'%layer_index)
-                activations.append(x)
-                layer_index += 1
+                #x = op.conv2d(x, out_channel=self.channel*16, stride=1, name='conv2d_%d'%layer_index)
+                #activations.append(x)
+                #layer_index += 1
+
+                #x = op._max_pool(x)
 
                 if patch:
+                    tf.logging.info('Patch GAN for %s' % name)
                     # After the last layer, a convolution is applied to map to a 1 dimensional output
                     x = op.conv2d(x, out_channel=1, stride=1, name='conv2d_%d'%layer_index, activation=None, normalization=False)
                 else:
+                    tf.logging.info('No Patch GAN for %s' % name)
                     x = slim.flatten(x)
                     x = op.fc(x, 1, activation=None, dropout=False, name='fc')
 
@@ -336,6 +340,8 @@ class discriminator(object):
 
     # From progressive GAN
     def minibatch_discrimination(self, x, group_size=4):
+        assert group_size != 1
+        
         batch_size, height, width, channel = x.get_shape().as_list()
         with tf.variable_scope('minibatch_discrimination'):
             group_size = tf.minimum(group_size, batch_size)

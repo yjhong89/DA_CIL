@@ -22,27 +22,21 @@ def load_config(config, ini):
 def make_savedir(config):
     model_type = config.get('config', 'experiment')
     adversarial_mode = config.get('config', 'mode')
-   # augmentation = config.getboolean('config', 'augmentation')
     noise = config.getboolean('generator', 'noise')
-    mask = config.getboolean('config', 'input_mask')
+    patch = config.getboolean('discriminator', 'patch')
     gen_type = config.get('generator', 'type')
-    source_only = config.getboolean('config', 'source_only')
+    source_only = config.getboolean(model_type, 'source_only')
 
     result = model_type + '_' + adversarial_mode + '_' + gen_type
 
     if noise:
-        if mask:
-            result = result + '_noise_mask'
-        else:
-            result = result + '_noise_wo_mask'
-    else:
-        if mask:
-            result = result + '_wo_noise_mask'
-        else:
-            result = result + '_wo_noise_wo_mask'
+        result += '_noise'
 
     if source_only:
         result = result + '_source_only'
+
+    if patch:
+        result += '_patch'
 
     return result
 
@@ -61,8 +55,8 @@ def summarize(summary_set, t2s_option, source_only=False):
         return tf.summary.merge([task_loss_summary, source_image1_summary, source_image2_summary, source_image3_summary])
 
     # Loss part
-    cyclic_summary = tf.summary.scalar('source_cyclic_loss', summary_set['source_cyclic_loss'])
-    cyclic_summary = tf.summary.scalar('target_cyclic_loss', summary_set['target_cyclic_loss'])
+    source_cyclic_summary = tf.summary.scalar('source_cyclic_loss', summary_set['source_cyclic_loss'])
+    target_cyclic_summary = tf.summary.scalar('target_cyclic_loss', summary_set['target_cyclic_loss'])
     s2t_g_loss_summary = tf.summary.scalar('s2t_g_loss', summary_set['s2t_g_loss'])
     t2s_g_loss_summary = tf.summary.scalar('t2s_g_loss', summary_set['t2s_g_loss'])
     s2t_style_loss_summary = tf.summary.scalar('s2t_style_loss', summary_set['s2t_style_loss'])
@@ -82,18 +76,20 @@ def summarize(summary_set, t2s_option, source_only=False):
     _, _, _, target_channels = summary_set['target_image'].get_shape().as_list()
     assert source_channels == target_channels
 
+    generator_merged = [source_cyclic_summary, target_cyclic_summary, s2t_g_loss_summary, t2s_g_loss_summary, generator_loss_summary]
+
     if source_channels == 3:
         s2t_summary = _summarize_transferred_grid(summary_set['source_image'], summary_set['source_transferred'], name='S2T', channels=source_channels)
         t2s_summary = _summarize_transferred_grid(summary_set['target_image'], summary_set['target_transferred'], name='T2S', channels=target_channels)
         s2t2s_summary = _summarize_transferred_grid(summary_set['source_image'], summary_set['back2source'], name='S2T2S', channels=source_channels)
         t2s2t_summary = _summarize_transferred_grid(summary_set['target_image'], summary_set['back2target'], name='T2S2T', channels=target_channels)
-        generator_merged = [cyclic_summary, s2t_g_loss_summary, t2s_g_loss_summary, generator_loss_summary, s2t_summary, t2s_summary, s2t2s_summary, t2s2t_summary]
+        generator_merged += [s2t_summary, t2s_summary, s2t2s_summary, t2s2t_summary]
     else:
         s2t_summary1, s2t_summary2, s2t_summary3 = _summarize_transferred_grid(summary_set['source_image'], summary_set['source_transferred'], name='S2T', channels=source_channels)
         t2s_summary1, t2s_summary2, t2s_summary3 = _summarize_transferred_grid(summary_set['target_image'], summary_set['target_transferred'], name='T2S', channels=target_channels)
         s2t2s_summary1, s2t2s_summary2, s2t2s_summary3 = _summarize_transferred_grid(summary_set['source_image'], summary_set['back2source'], name='S2T2S', channels=source_channels)
         t2s2t_summary1, t2s2t_summary2, t2s2t_summary3 = _summarize_transferred_grid(summary_set['target_image'], summary_set['back2target'], name='T2S2T', channels=target_channels)
-        generator_merged = [cyclic_summary, s2t_g_loss_summary, t2s_g_loss_summary, generator_loss_summary, s2t_summary1, s2t_summary2, s2t_summary3, t2s_summary1, t2s_summary2, t2s_summary3, s2t2s_summary1, s2t2s_summary2, s2t2s_summary3, t2s2t_summary1, t2s2t_summary2, t2s2t_summary3]
+        generator_merged += [s2t_summary1, s2t_summary2, s2t_summary3, t2s_summary1, t2s_summary2, t2s_summary3, s2t2s_summary1, s2t2s_summary2, s2t2s_summary3, t2s2t_summary1, t2s2t_summary2, t2s2t_summary3]
 
     discriminator_merged = [s2t_d_loss_summary, t2s_d_loss_summary, s2t_style_loss_summary, t2s_style_loss_summary, task_loss_summary, t2s_task_loss_summary, discriminator_loss_summary]
 
@@ -202,18 +198,20 @@ def _summarize_transferred_grid(source_images, transferred_images=None, name='Im
             return tf.summary.image('%s_image_grid' % name, grid1, max_outputs=1), tf.summary.image('%s_image_grid' % name, grid2, max_outputs=1), tf.summary.image('%s_image_grid' % name, grid3, max_outputs=1), 
 
 
-def config_summary(save_dir, s2t_adversarial_weight, t2s_adversarial_weight, s2t_cyclic_weight, t2s_cyclic_weight, s2t_task_weight, t2s_task_weight, discriminator_step, generator_step, adversarial_mode, whether_noise, noise_dim):
+def config_summary(save_dir, s2t_adversarial_weight, t2s_adversarial_weight, s2t_cyclic_weight, t2s_cyclic_weight, s2t_task_weight, t2s_task_weight, discriminator_step, generator_step, adversarial_mode, whether_noise, noise_dim, s2t_style_weight, t2s_style_weight):
     if not os.path.exists(save_dir):
         os.mkdir(save_dir)
 
     with open(os.path.join(save_dir, 'params.txt'), 'w') as f:
         f.write(str(adversarial_mode) + '\n')
-        f.write('\ns2t_adversarial weight : ' + str(s2t_adversarial_weight))
-        f.write('\nt2s_adversarial weight : ' + str(t2s_adversarial_weight))
-        f.write('\ns2t_cyclic weight : ' + str(s2t_cyclic_weight))
-        f.write('\nt2s_cyclic_weight : ' + str(t2s_cyclic_weight))
-        f.write('\ns2t_task weight : ' + str(s2t_task_weight))
-        f.write('\nt2s_task weight : ' + str(t2s_task_weight))
+        f.write('\ns2t adversarial weight : ' + str(s2t_adversarial_weight))
+        f.write('\nt2s adversarial weight : ' + str(t2s_adversarial_weight))
+        f.write('\ns2t cyclic weight : ' + str(s2t_cyclic_weight))
+        f.write('\nt2s cyclic weight : ' + str(t2s_cyclic_weight))
+        f.write('\ns2t task weight : ' + str(s2t_task_weight))
+        f.write('\nt2s task weight : ' + str(t2s_task_weight))
+        f.write('\ns2t style weight : ' + str(s2t_style_weight))
+        f.write('\nt2s style weight : ' + str(t2s_style_weight))
         f.write('\nDiscriminator step : ' + str(discriminator_step))
         f.write('\nGenerator step : ' + str(generator_step))
         f.write('\nNoise : ' + str(whether_noise))

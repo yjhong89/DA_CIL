@@ -23,11 +23,12 @@ class model():
         if not self.source_only:
             discriminator_channel = config.getint('discriminator', 'channel')
             self.discriminator_dropout_prob = config.getfloat('discriminator', 'dropout_prob')
+            self.patch = config.getboolean('discriminator', 'patch')
             self.generator_type = config.get('generator', 'type')
             generator_channel = config.getint('generator', 'channel')
             self.generator_out_channel = config.getint('generator', 'out_channel')
             self.generator = modules.generator(generator_channel, config, args)
-            self.discriminator = modules.discriminator(discriminator_channel, group_size=self.args.batch_size)
+            self.discriminator = modules.discriminator(discriminator_channel, group_size=1)
         # List of 4 branch modules
         self.task = modules.task(regression_channel, image_fc, measurement_fc, branch_fc, self.args.training) 
 
@@ -71,18 +72,18 @@ class model():
             with tf.name_scope('discriminator'):
                 # Patch discriminator
                 if self.share_all_image:
-                    self.s2t_fake, self.s2t_fake_activations = self.discriminator(self.g_s2t[:,:,:,:3], name='D_S2T', dropout_prob=self.discriminator_dropout_prob)
-                    self.t2s_fake, self.t2s_fake_activations = self.discriminator(self.g_t2s[:,:,:,:3], name='D_T2S', dropout_prob=self.discriminator_dropout_prob)
+                    self.s2t_fake, self.s2t_fake_activations = self.discriminator(self.g_s2t[:,:,:,:3], name='D_S2T', dropout_prob=self.discriminator_dropout_prob, patch=self.patch)
+                    self.t2s_fake, self.t2s_fake_activations = self.discriminator(self.g_t2s[:,:,:,:3], name='D_T2S', dropout_prob=self.discriminator_dropout_prob, patch=self.patch)
     
-                    self.target_real, self.target_real_activations = self.discriminator(self.target_concat, reuse=True, name='D_S2T', dropout_prob=self.discriminator_dropout_prob)
-                    self.source_real, self.source_real_activations = self.discriminator(self.source_concat, reuse=True, name='D_T2S', dropout_prob=self.discriminator_dropout_prob)
+                    self.target_real, self.target_real_activations = self.discriminator(self.target_concat, reuse=True, name='D_S2T', dropout_prob=self.discriminator_dropout_prob, patch=self.patch)
+                    self.source_real, self.source_real_activations = self.discriminator(self.source_concat, reuse=True, name='D_T2S', dropout_prob=self.discriminator_dropout_prob, patch=self.patch)
                 
                 else:
-                    self.s2t_fake = self.discriminator(self.g_s2t[:,:,:,:9], name='D_S2T', dropout_prob=self.discriminator_dropout_prob)
-                    self.t2s_fake = self.discriminator(self.g_t2s[:,:,:,:9], name='D_T2S', dropout_prob=self.discriminator_dropout_prob)
+                    self.s2t_fake = self.discriminator(self.g_s2t[:,:,:,:9], name='D_S2T', dropout_prob=self.discriminator_dropout_prob, patch=self.patch)
+                    self.t2s_fake = self.discriminator(self.g_t2s[:,:,:,:9], name='D_T2S', dropout_prob=self.discriminator_dropout_prob, patch=self.patch)
     
-                    self.target_real = self.discriminator(target, reuse=True, name='D_S2T', dropout_prob=self.discriminator_dropout_prob)
-                    self.source_real = self.discriminator(source, reuse=True, name='D_T2S', dropout_prob=self.discriminator_dropout_prob)
+                    self.target_real = self.discriminator(target, reuse=True, name='D_S2T', dropout_prob=self.discriminator_dropout_prob, patch=self.patch)
+                    self.source_real = self.discriminator(source, reuse=True, name='D_T2S', dropout_prob=self.discriminator_dropout_prob, patch=self.patch)
         
         else:
             self.summary['source_image'] = source
@@ -108,21 +109,18 @@ class model():
                     
 
                 self.summary['source_cyclic_loss'] = self.s2t_cyclic_loss
-                self.summary['target_cyclic_loss'] = self.t2s_cclic_loss
+                self.summary['target_cyclic_loss'] = self.t2s_cyclic_loss
                 
                     
             # Wasserstein with gradient-penalty
             with tf.name_scope('adversarial'):
-                if mode == 'FISHER':
-                    self.s2t_g_loss, self.s2t_d_loss, self.s2t_alpha = losses.adversarial_loss(self.summary['target_image'], self.g_s2t, self.target_real, self.s2t_fake, mode=mode, discriminator=self.discriminator, discriminator_name='D_S2T')
-                    self.t2s_g_loss, self.t2s_d_loss, self.t2s_alpha = losses.adversarial_loss(self.summary['source_image'], self.g_t2s, self.source_real, self.t2s_fake, mode=mode, discriminator=self.discriminator, discriminator_name='D_T2S')
-                else:
-                    self.s2t_g_loss, self.s2t_d_loss = losses.adversarial_loss(self.summary['target_image'], self.g_s2t, self.target_real, self.s2t_fake, mode=mode, discriminator=self.discriminator, discriminator_name='D_S2T')
-                    self.t2s_g_loss, self.t2s_d_loss = losses.adversarial_loss(self.summary['source_image'], self.g_t2s, self.source_real, self.t2s_fake, mode=mode, discriminator=self.discriminator, discriminator_name='D_T2S')
-                self.summary['s2t_g_loss'] = self.s2t_g_loss
-                self.summary['t2s_g_loss'] = self.t2s_g_loss
-                self.summary['s2t_d_loss'] = self.s2t_d_loss
-                self.summary['t2s_d_loss'] = self.t2s_d_loss     
+                self.s2t_adversarial_loss = losses.adversarial_loss(None, None, self.target_real, self.s2t_fake, mode=mode, discriminator=self.discriminator, discriminator_name='D_S2T', patch=self.patch)
+                self.t2s_adversarial_loss = losses.adversarial_loss(None, None, self.target_real, self.s2t_fake, mode=mode, discriminator=self.discriminator, discriminator_name='D_T2S', patch=self.patch)
+                self.summary['s2t_g_loss'] = self.s2t_adversarial_loss[0]
+                self.summary['t2s_g_loss'] = self.t2s_adversarial_loss[0]
+                self.summary['s2t_d_loss'] = self.s2t_adversarial_loss[1]
+                self.summary['t2s_d_loss'] = self.t2s_adversarial_loss[1]     
+
         with tf.name_scope('style'):
             self.s2t_style_loss = losses.style_loss(self.s2t_fake_activations, self.target_real_activations, self.style_weights)
             self.t2s_style_loss = losses.style_loss(self.t2s_fake_activations, self.source_real_activations, self.style_weights)
