@@ -51,7 +51,7 @@ def train(sess, args, config):
     whether_noise = config.getboolean('generator', 'noise')
     noise_dim = config.getint('generator', 'noise_dim')
 
-    source_only = config.getboolean(model_type, 'source_only')
+    source_only = config.getboolean('config', 'source_only')
     s2t_adversarial_weight = config.getfloat(model_type, 's2t_adversarial_weight')
     t2s_adversarial_weight = config.getfloat(model_type, 't2s_adversarial_weight')
     s2t_cyclic_weight = config.getfloat(model_type, 's2t_cyclic_weight')

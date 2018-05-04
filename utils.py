@@ -25,7 +25,7 @@ def make_savedir(config):
     noise = config.getboolean('generator', 'noise')
     patch = config.getboolean('discriminator', 'patch')
     gen_type = config.get('generator', 'type')
-    source_only = config.getboolean(model_type, 'source_only')
+    source_only = config.getboolean('config', 'source_only')
 
     result = model_type + '_' + adversarial_mode + '_' + gen_type
 
@@ -67,7 +67,7 @@ def summarize(summary_set, t2s_option, source_only=False):
     if t2s_option:
         t2s_task_loss_summary = tf.summary.scalar('t2s_task_loss', summary_set['t2s_classification_loss'])
     else:
-        t2s_task_loss_summary = tf.summary.scalar('t2s_classification_loss', 0)
+        t2s_task_loss_summary = tf.summary.scalar('t2s_task_loss', 0)
     generator_loss_summary = tf.summary.scalar('generator_loss', summary_set['generator_loss'])
     discriminator_loss_summary = tf.summary.scalar('discriminator_loss', summary_set['discriminator_loss'])
 

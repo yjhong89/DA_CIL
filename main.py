@@ -20,7 +20,7 @@ def main():
     parser.add_argument('--optimizer', type=str, default='adam')
     parser.add_argument('--training', type=utils.str2bool, default='t')
     parser.add_argument('--max_iter', type=int, default=400000)
-    parser.add_argument('--t2s_task', type=utils.str2bool, default='t')
+    parser.add_argument('--t2s_task', type=utils.str2bool, default='f')
     parser.add_argument('--pixel_norm', type=utils.str2bool, default='t')
     parser.add_argument('--learning_rate', type=float, default=0.0002)
     parser.add_argument('--lr_decay', type=utils.str2bool, default='n')

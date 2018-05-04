@@ -15,8 +15,8 @@ class model():
         measurement_fc = config.getint('task', 'measurement_fc')
         branch_fc = config.getint('task', 'branch_fc')
 
-        self.source_only = config.getboolean('da_cil', 'source_only')
-        self.style_weights = config.getlist('da_cil', 'style_weights')
+        self.source_only = config.getboolean('config', 'source_only')
+        self.style_weights = config.getlist('config', 'style_weights')
 
         self.share_all_image = config.getboolean('generator', 'share_all_image')
 

@@ -16,6 +16,31 @@ def _instance_norm(x, training=True, name='instance_norm', epsilon=1e-5):
         
         return scale * normalized + shift
 
+def _group_norm(x, training=True, name='group_norm', epsilon=1e-5, group_size=32):
+    batch_size, height, width, channel = x.get_shape().as_list()
+    with tf.variable_scope(name):
+        scale = tf.get_variable('scale', [channel], initializer=tf.constant_initializer(1))
+        shift = tf.get_variable('shift', [channel], initializer=tf.constant_initializer(0))
+
+        # Transpose [N,H,W,C] to [N,C,H,W]
+        x_trans = tf.transpose(x, [0,3,1,2])
+        group_size = min(group_size, channel)
+        x = tf.reshape(x_trans, [batch_size, group_size, channel // group_size, height, width])
+
+        group_mean, group_var = tf.nn.moments(x, [2,3,4], keep_dims=True)
+
+        normalized = (x -group_mean) / tf.sqrt(group_var + epsilon)
+
+        normalized = tf.reshape(normalized, [batch_size, channel, height, width])
+        scale = tf.reshape(scale, [1, channel, 1, 1])
+        shift = tf.reshape(shift, [1, channel, 1, 1])
+
+        output = scale * normalized + shift
+        output = tf.transpose(output, [0,2,3,1])
+
+        return output
+    
+
 # From progressive GAN
 def _pixel_norm(x, name='pixel_norm', epsilon=1e-8, training=True):
     # NHWC
@@ -102,7 +127,7 @@ def residual_block(x, out_dim, layer_index, filter_size=3, stride=1, name='resid
 def fc(x, hidden, dropout_ratio=0.5, activation=tf.nn.relu, dropout=True, name='fc', bias=True):
     _, in_dim = x.get_shape().as_list()
     with tf.variable_scope(name):
-        weight = tf.get_variable('weight', shape=[in_dim, hidden], initializer=tf.contrib.layers.xavier_initializer())
+        weight = tf.get_variable('weight', shape=[in_dim, hidden], initializer=tf.truncated_normal_initializer(stddev=0.02))
         output = tf.matmul(x, weight)
         if bias:
             bias = tf.get_variable('bias', shape=[hidden], initializer=tf.constant_initializer(0.1))
@@ -122,7 +147,7 @@ def global_average_pooling(x, name='global_pooling'):
 def dilated_conv2d(x, out_channel, filter_size, dilation_rate, name='dilated_conv2d', activation=tf.nn.relu, normalization=_instance_norm, padding='VALID', training=True, bias=True):
     _, _, _, in_channel = x.get_shape().as_list()
     with tf.variable_scope(name):
-        weight = tf.get_variable('weight', shape=[filter_size, filter_size, in_channel, out_channel], initializer=tf.contrib.layers.xavier_initializer())
+        weight = tf.get_variable('weight', shape=[filter_size, filter_size, in_channel, out_channel], initializer=tf.truncated_normal_initializer(stddev=0.02))
                 
         rate = [dilation_rate, dilation_rate]
         # stride must be 1
@@ -145,7 +170,7 @@ def dilated_conv2d(x, out_channel, filter_size, dilation_rate, name='dilated_con
 def conv2d(x, out_channel, filter_size=4, stride=2, name='conv2d', activation=_leaky_relu, normalization=_instance_norm, padding='SAME', training=True, bias=True):
     _, _, _, in_channel = x.get_shape().as_list()
     with tf.variable_scope(name):
-        weight = tf.get_variable('weight', shape=[filter_size, filter_size, in_channel, out_channel], initializer=tf.contrib.layers.xavier_initializer())
+        weight = tf.get_variable('weight', shape=[filter_size, filter_size, in_channel, out_channel], initializer=tf.truncated_normal_initializer(stddev=0.02))
         # NHWC: batch, height, width, channel
         # padding VALID: no zero padding, only covers the valid input
         output = tf.nn.conv2d(x, weight, strides=[1, stride, stride, 1], padding=padding, data_format='NHWC', name='convolution')
@@ -170,7 +195,7 @@ def transpose_conv2d(x, out_channel, filter_size=4, stride=2, name='transpose_co
     new_height, new_width = int(height*stride), int(width*stride)
     out_shape = tf.stack([batch_size, new_height, new_width, out_channel])
     with tf.variable_scope(name):
-        weight = tf.get_variable('weight', [filter_size, filter_size, out_channel, in_channel], initializer=tf.contrib.layers.xavier_initializer())
+        weight = tf.get_variable('weight', [filter_size, filter_size, out_channel, in_channel], initializer=tf.truncated_normal_initializer(stddev=0.02))
         bias = tf.get_variable('bias', [out_channel], initializer=tf.constant_initializer(0))
 
         output = tf.nn.conv2d_transpose(x, weight, output_shape=out_shape, strides=[1, stride, stride, 1], padding='SAME', data_format='NHWC', name='transposed_convolution')
