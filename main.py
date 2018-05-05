@@ -6,16 +6,17 @@ import utils
 from train import train
 import evaluation_pixel_da
 import evaluation_source_only
+import evaluation_da_cil
 
 os.environ['CUDA_DEVICE_ORDER'] = 'PCI_BUS_ID'
-os.environ['CUDA_VISIBLE_DEVICES'] = '1'
+os.environ['CUDA_VISIBLE_DEVICES'] = '0'
 
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('-d', '--delete', action='store_true')
     parser.add_argument('-l', '--log', action='store_true')
     parser.add_argument('--config', default='config.ini')
-    parser.add_argument('--batch_size', type=int, default=8)
+    parser.add_argument('--batch_size', type=int, default=32)
     parser.add_argument('--clip_norm', type=float, default=5.0)
     parser.add_argument('--optimizer', type=str, default='adam')
     parser.add_argument('--training', type=utils.str2bool, default='t')
@@ -27,7 +28,7 @@ def main():
     parser.add_argument('--save_interval', type=int, default=100)
     parser.add_argument('--summary_interval', type=int, default=50)
     parser.add_argument('--load_ckpt', type=utils.str2bool, default='t')
-    parser.add_argument('--num_eval', type=int, default=1)
+    parser.add_argument('--num_eval', type=int, default=100)
     parser.add_argument('--num_label', type=int, default=5)
     parser.add_argument('--print_info', type=utils.str2bool, default='n')
 
@@ -50,7 +51,13 @@ def main():
             if config.getboolean('config', 'source_only'):
                 evaluation_source_only.evaluation(sess, args, config)
             else:
-                evaluation_pixel_da.evaluation(sess, args, config)
+                experiment = config.get('config', 'experiment')
+                if experiment == 'da_cil':
+                    evaluation_da_cil.evaluation(sess, args, config)
+                elif experiment == 'pixel_da':
+                    evaluation_pixel_da.evaluation(sess, args, config)
+                else:
+                    raise ValueError('Not supported: %s' % experiment)
 
 
 if __name__ == "__main__":

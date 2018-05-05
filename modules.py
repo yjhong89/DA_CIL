@@ -67,18 +67,18 @@ class generator(object):
                     # 2,2
                     layer_index += 1
                     # Middle point of total architecture(number of total layers=16)
-                    e8 = op.conv2d(tf.nn.relu(e7), out_channel=self.channel*8, name='conv2d_%d'%layer_index, activation=False, normalization=normalize_func)
+                    #e8 = op.conv2d(tf.nn.relu(e7), out_channel=self.channel*8, name='conv2d_%d'%layer_index, activation=False, normalization=normalize_func)
                     # 1,1
-                    layer_index += 1
+                    #layer_index += 1
                 
                 # U-Net architecture is with skip connections between each layer i in the encoer and layer n-i in the decoder. Concatenate activations in channel axis
                 # Dropout with 0.5
                 with tf.variable_scope('decoder'):
-                    d1 = op.transpose_conv2d(tf.nn.relu(e8), out_channel=self.channel*8, name='transpose_conv2d_%d'%layer_index, activation=False, dropout=True, normalization=normalize_func)
-                    d1 = tf.concat([d1, e7], axis=3)
+                    #d1 = op.transpose_conv2d(tf.nn.relu(e8), out_channel=self.channel*8, name='transpose_conv2d_%d'%layer_index, activation=False, dropout=True, normalization=normalize_func)
+                    #d1 = tf.concat([d1, e7], axis=3)
                     # 2,2
-                    layer_index += 1
-                    d2 = op.transpose_conv2d(tf.nn.relu(d1), out_channel=self.channel*8, name='transpose_conv2d_%d'%layer_index, activation=False, dropout=True, normalization=normalize_func)
+                    #layer_index += 1
+                    d2 = op.transpose_conv2d(tf.nn.relu(e7), out_channel=self.channel*8, name='transpose_conv2d_%d'%layer_index, activation=False, dropout=True, normalization=normalize_func)
                     d2 = tf.concat([d2, e6], axis=3)
                     # 4,4
                     layer_index += 1
@@ -371,13 +371,14 @@ class discriminator(object):
 
 
 class task(object):
-    def __init__(self, channel, image_fc, measurement_fc, branch_fc, training=True, name='task'):
+    def __init__(self, channel, image_fc, measurement_fc, branch_fc, training=True, name='task', classifier_type='DRN'):
         self.channel = channel
         self.name = name
         self.image_fc = image_fc
         self.branch_fc = branch_fc
         self.measurement_fc = measurement_fc
         self.num_commands = 3
+        self.classifier_type = classifier_type
         self.training = training    
         if self.training:
             self.dropout = [0.7] * 2 + [0.5] * 2 + [0.5] * 1 + [0.5, 1.] * 5
@@ -391,6 +392,7 @@ class task(object):
     def __call__(self, image, measurements, reuse_private=False, reuse_shared=False, private='private', shared='shared_task', reuse=False):
         image_layer_index = 0
         fc_index = 0
+        residual_index = 0
         
         branches = list()
         branches_feature = list()
@@ -402,22 +404,48 @@ class task(object):
 
                 with tf.variable_scope('image_module'):
                     with tf.variable_scope(private, reuse=reuse_private):
-                        # [240, 360]
+                        # [96, 96]
                         x = op.conv2d(image, out_channel=self.channel, filter_size=7, stride=2, normalization=op._batch_norm, activation=tf.nn.relu, name='conv2d_%d'%image_layer_index)
                         image_layer_index += 1
 
                     with tf.variable_scope(shared, reuse=reuse_shared):
-                        # [120, 180]
+                        # [48, 48]
                         x, image_layer_index = op.residual_block(x, out_dim=self.channel, layer_index=image_layer_index, normalization=op._group_norm, downsample=False, training=self.training)
                         x, image_layer_index = op.residual_block(x, out_dim=self.channel, layer_index=image_layer_index, normalization=op._group_norm, downsample=False, training=self.training)
                         x, image_layer_index = op.residual_block(x, out_dim=self.channel*2, layer_index=image_layer_index, normalization=op._group_norm, downsample=True, training=self.training)
                         x, image_layer_index = op.residual_block(x, out_dim=self.channel*2, layer_index=image_layer_index, normalization=op._group_norm, downsample=False, training=self.training)
-                        # [60, 90]
-                        x, image_layer_index = op.residual_block(x, out_dim=self.channel*4, layer_index=image_layer_index, normalization=op._group_norm, downsample=True, training=self.training)
-                        x, image_layer_index = op.residual_block(x, out_dim=self.channel*4, layer_index=image_layer_index, normalization=op._group_norm, downsample=False, training=self.training)
-                        # [30, 45]
-                        x, image_layer_index = op.residual_block(x, out_dim=self.channel*8, layer_index=image_layer_index, normalization=op._group_norm, downsample=True, training=self.training)
-                        x, image_layer_index = op.residual_block(x, out_dim=self.channel*8, layer_index=image_layer_index, normalization=op._group_norm, downsample=False, training=self.training)
+                       
+
+                        if self.classifier_type == 'DRN':
+                            # Dilated convolution instead of down sample
+                            x, image_layer_index = op.dilated_residual_block(x, out_dim=self.channel*4, dilation_rate=2, layer_index=image_layer_index, downsample=False, normalization=op._group_norm, name='residual_%d'%residual_index, training=self.training)
+                            residual_index += 1
+                            x, image_layer_index = op.dilated_residual_block(x, out_dim=self.channel*4, dilation_rate=2, layer_index=image_layer_index, downsample=False, normalization=op._group_norm, name='residual_%d'%residual_index, training=self.training)
+                            residual_index += 1
+                            
+                            x, image_layer_index = op.dilated_residual_block(x, out_dim=self.channel*8, dilation_rate=4, layer_index=image_layer_index, downsample=False, normalization=op._group_norm, name='residual_%d'%residual_index, training=self.training)
+                            residual_index += 1
+                            x, image_layer_index = op.dilated_residual_block(x, out_dim=self.channel*8, dilation_rate=4, layer_index=image_layer_index, downsample=False, normalization=op._group_norm, name='residual_%d'%residual_index, training=self.training)
+                            residual_index += 1
+
+                            # Removing gridding artifacts
+                            x = op.dilated_conv2d(x, out_channel=self.channel*8, filter_size=3, dilation_rate=2, activation=tf.nn.relu, normalization=op._group_norm, padding='SAME', name='conv2d_%d'%image_layer_index, training=self.training)
+                            image_layer_index += 1
+                            x = op.dilated_conv2d(x, out_channel=self.channel*8, filter_size=3, activation=tf.nn.relu, dilation_rate=2, normalization=op._group_norm, padding='SAME', name='conv2d_%d'%image_layer_index, training=self.training)
+                            image_layer_index += 1
+
+                            x = op.conv2d(x, out_channel=self.channel*8, filter_size=3, stride=1, activation=tf.nn.relu, normalization=op._batch_norm, name='conv2d_%d'%image_layer_index, training=self.training)
+                            image_layer_index += 1
+                            x = op.conv2d(x, out_channel=self.channel*8, filter_size=3, stride=1, activation=tf.nn.relu, normalization=op._batch_norm, name='conv2d_%d'%image_layer_index, training=self.training)
+                            image_layer_index += 1
+
+                        elif self.classifier_type == 'RESNET':
+                            # [24, 24]
+                            x, image_layer_index = op.residual_block(x, out_dim=self.channel*4, layer_index=image_layer_index, normalization=op._group_norm, downsample=True, training=self.training)
+                            x, image_layer_index = op.residual_block(x, out_dim=self.channel*4, layer_index=image_layer_index, normalization=op._group_norm, downsample=False, training=self.training)
+                            # [12, 12]
+                            x, image_layer_index = op.residual_block(x, out_dim=self.channel*8, layer_index=image_layer_index, normalization=op._group_norm, downsample=True, training=self.training)
+                            x, image_layer_index = op.residual_block(x, out_dim=self.channel*8, layer_index=image_layer_index, normalization=op._group_norm, downsample=False, training=self.training)
            
                         x = op.global_average_pooling(x)
         

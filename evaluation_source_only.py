@@ -82,11 +82,9 @@ def evaluation(sess, args, config):
         right_acc = np.zeros(5)
 
         for idx in range(args.num_eval):
-            command, steer_label, np_im, steer_pred_l, steer_pred_s, steer_pred_r, cmd_l_label_num, cmd_s_label_num, cmd_r_label_num, cmd_l_correct, cmd_s_correct, cmd_r_correct, check1, check2 \
-                 = sess.run([source_command_batch, source_label_batch, source_image_batch, command_l, command_s, command_r, command_l_labels, command_s_labels, command_r_labels, command_l_correct, command_s_correct, command_r_correct, da_model.classification, da_model.cnn])
+            command, steer_label, np_im, steer_pred_l, steer_pred_s, steer_pred_r, cmd_l_label_num, cmd_s_label_num, cmd_r_label_num, cmd_l_correct, cmd_s_correct, cmd_r_correct \
+                 = sess.run([source_command_batch, source_label_batch, source_image_batch, command_l, command_s, command_r, command_l_labels, command_s_labels, command_r_labels, command_l_correct, command_s_correct, command_r_correct])
 
-            #print(check1)
-            #print(check2)
 
             if args.print_info:
                 print('COMMAND LABEL')

@@ -49,9 +49,12 @@ def str2bool(v):
         raise ValueError('%s is not supported' % v)
 
 def summarize(summary_set, t2s_option, source_only=False):
+    _, _, _, source_channels = summary_set['source_image'].get_shape().as_list()
+    tf.logging.info('%d channels' % source_channels)
+
     if source_only:
         task_loss_summary = tf.summary.scalar('task_loss', summary_set['classification_loss'])
-        source_image1_summary, source_image2_summary, source_image3_summary = _summarize_transferred_grid(summary_set['source_image'])
+        source_image1_summary, source_image2_summary, source_image3_summary = _summarize_transferred_grid(summary_set['source_image'], channels=source_channels)
         return tf.summary.merge([task_loss_summary, source_image1_summary, source_image2_summary, source_image3_summary])
 
     # Loss part
@@ -71,13 +74,12 @@ def summarize(summary_set, t2s_option, source_only=False):
     generator_loss_summary = tf.summary.scalar('generator_loss', summary_set['generator_loss'])
     discriminator_loss_summary = tf.summary.scalar('discriminator_loss', summary_set['discriminator_loss'])
 
-    # Image part
-    _, _, _, source_channels = summary_set['source_image'].get_shape().as_list()
+    generator_merged = [source_cyclic_summary, target_cyclic_summary, s2t_g_loss_summary, t2s_g_loss_summary, generator_loss_summary]
+    
     _, _, _, target_channels = summary_set['target_image'].get_shape().as_list()
     assert source_channels == target_channels
 
-    generator_merged = [source_cyclic_summary, target_cyclic_summary, s2t_g_loss_summary, t2s_g_loss_summary, generator_loss_summary]
-
+    # Image part
     if source_channels == 3:
         s2t_summary = _summarize_transferred_grid(summary_set['source_image'], summary_set['source_transferred'], name='S2T', channels=source_channels)
         t2s_summary = _summarize_transferred_grid(summary_set['target_image'], summary_set['target_transferred'], name='T2S', channels=target_channels)

@@ -10,7 +10,8 @@ class model():
         self.args = args
 
         model_name = config.get('config', 'experiment')
-        regression_channel = config.getint('task', 'channel')
+        task_channel = config.getint('task', 'channel')
+        task_module_type = config.get('task', 'classifier_type')
         image_fc = config.getint('task', 'image_fc')
         measurement_fc = config.getint('task', 'measurement_fc')
         branch_fc = config.getint('task', 'branch_fc')
@@ -30,7 +31,7 @@ class model():
             self.generator = modules.generator(generator_channel, config, args)
             self.discriminator = modules.discriminator(discriminator_channel, group_size=1)
         # List of 4 branch modules
-        self.task = modules.task(regression_channel, image_fc, measurement_fc, branch_fc, self.args.training) 
+        self.task = modules.task(task_channel, image_fc, measurement_fc, branch_fc, self.args.training, task_module_type) 
 
         self.summary = dict()
 
@@ -121,11 +122,11 @@ class model():
                 self.summary['s2t_d_loss'] = self.s2t_adversarial_loss[1]
                 self.summary['t2s_d_loss'] = self.t2s_adversarial_loss[1]     
 
-        with tf.name_scope('style'):
-            self.s2t_style_loss = losses.style_loss(self.s2t_fake_activations, self.target_real_activations, self.style_weights)
-            self.t2s_style_loss = losses.style_loss(self.t2s_fake_activations, self.source_real_activations, self.style_weights)
-            self.summary['s2t_style_loss'] = self.s2t_style_loss
-            self.summary['t2s_style_loss'] = self.t2s_style_loss
+            with tf.name_scope('style'):
+                self.s2t_style_loss = losses.style_loss(self.s2t_fake_activations, self.target_real_activations, self.style_weights)
+                self.t2s_style_loss = losses.style_loss(self.t2s_fake_activations, self.source_real_activations, self.style_weights)
+                self.summary['s2t_style_loss'] = self.s2t_style_loss
+                self.summary['t2s_style_loss'] = self.t2s_style_loss
 
         with tf.name_scope('task'):
             self.classification_loss, _ = losses.task_classifier_loss(steer, command, self.end)
