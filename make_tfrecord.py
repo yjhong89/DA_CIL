@@ -12,7 +12,7 @@ def main():
     parser.add_argument('-t', '--data_type', nargs='+', default=['train', 'test'])
     parser.add_argument('-d', '--delete', action='store_true')
     parser.add_argument('-l', '--log', action='store_true')
-    parser.add_argument('--source', type=utils.str2bool, default='t', help='Whether for source')
+    parser.add_argument('--dataset', default='source', help='select among source, target, transferred')
 
     args = parser.parse_args()
     if args.log:    
@@ -24,25 +24,33 @@ def main():
     config = configparser.ConfigParser()
     utils.load_config(config, args.config)
 
-    carla_data_dir = os.path.join(base_dir, config.get('config', 'carla'))    
-    tfrecord_dir = os.path.join(base_dir, config.get('config', 'tfrecord'))    
+    if args.dataset=='source':
+      data_mode = 'simul'
+    elif args.dataset=='transferred':
+      data_mode = 'transferred'
+    else:
+      data_mode = 'real'
+    data_dir = os.path.join(base_dir, data_mode)
+    #carla_data_dir = os.path.join(base_dir, config.get('config', 'carla'))    
+    tfrecord_dir = os.path.join(base_dir, config.get('tfrecord', 'tfrecord'))    
     
     if args.delete:
         tf.logging.warn('Delete existing tfrecord files')
         shutil.rmtree(tfrecord_dir)
 
-    os.makedirs(tfrecord_dir, exist_ok=True)   
+    if not os.path.exists(tfrecord_dir):
+      os.makedirs(tfrecord_dir)   
 
     for t in args.data_type:
-        tfrecord_path = dataset_utils.tfrecord_path(tfrecord_dir, args.source, t) 
+        tfrecord_path = dataset_utils.tfrecord_path(tfrecord_dir, args.dataset, t) 
         tf.logging.info('Writing %s.tfrecord file' % t)
 
         with tf.python_io.TFRecordWriter(tfrecord_path) as writer:
-            data_path = os.path.join(carla_data_dir, config.get('config', t))
-            if not os.path.exists(data_path):
-                raise Exception('No %s directory' % data_path)
+            #data_path = os.path.join(carla_data_dir, config.get('config', t))
+            if not os.path.exists(data_dir):
+                raise Exception('No %s directory' % data_dir)
             
-            dataset_utils.process_h5file(data_path, writer)
+            dataset_utils.process_h5file(data_dir, writer,t,args.dataset)
 
 
 

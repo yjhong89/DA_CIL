@@ -18,28 +18,36 @@ _TARGET_ITEMS_TO_DESCRIPTIONS = {
             'image': 'A [180x320x3]',
             'label': 'A single integer between 0 and 8'}
 
-def tfrecord_path(tfrecord_dir, whether_for_source, data_type): 
-    if whether_for_source:
-        return os.path.join(tfrecord_dir, 'source_' + data_type + '.tfrecord')
-    else:
-        return os.path.join(tfrecord_dir, 'target_' + data_type + '.tfrecord')
+regressionList = [-0.5,-0.3,-0.1,0.1,0.3,0.5]
+ 
 
-def process_h5file(data_path, writer):
-    tf.logging.info('Loading %s' % data_path)
-    file_list = glob.glob(os.path.join(data_path, '*.h5'))
+def tfrecord_path(tfrecord_dir, dataset, data_type): 
+    assert dataset in ['source','target','transferred']
+    return os.path.join(tfrecord_dir, dataset +'_' + data_type + '.tfrecord')
+
+def process_h5file(data_path, writer, data_type,dataset):
+    tf.logging.info('Loading %s for %s' % (data_path, data_type))
+    file_list = glob.glob(os.path.join(data_path, '*.hdf5'))
     
     for f in file_list:
         try:
             tf.logging.info('Read %s' % f)
             hdf_content = h5py.File(f, 'r')
-            imgs = hdf_content.get('tr_img')
-            lbls = hdf_content.get('tr_labels')
-            onds = hdf_content.get('tr_conds')
-            measures = hdf_content.get('tr_measure')
+            if data_type == 'train':
+              imgs = hdf_content.get('tr_img')
+              lbls = hdf_content.get('tr_labels')
+              conds = hdf_content.get('tr_conds')
+              measures = hdf_content.get('tr_measure')
+            else:
+              imgs = hdf_content.get('ts_img')
+              lbls = hdf_content.get('ts_labels')
+              conds = hdf_content.get('ts_conds')
+              measures = hdf_content.get('ts_measure')
+
             if len(imgs) != len(lbls):
                 raise Exception
             num_files = len(imgs)
-
+            print(num_files)
         except OSError as e:
             print('Error:', e)
             print(f)
@@ -51,9 +59,15 @@ def process_h5file(data_path, writer):
             # Get image size: [height, width]: [88, 200]
             image_size = rgb_data.shape[:-1]
             # Get measures
-            ang_z, linacc_x, linacc_y = _get_stats(lbls[i])
-
-            example = _make_tfexample(rgb_data, np.array([lbls[i]]), np.array([ang_z]), np.array([linacc_x]), np.array([linacc_y]), _get_one_hot(conds[i]))
+            ang_z, linacc_x, linacc_y = _get_stats(measures[i])
+            if dataset == 'transferred':
+              lbls_class = lbls[i]
+            else:
+              for j in range(1,len(regressionList)):
+                if lbls[i] <= regressionList[j]:
+                  lbls_clss = j -1
+                  break 
+            example = _make_tfexample(rgb_data, _get_one_hot(lbls_class,soft_class=True,class_num=5), np.array([ang_z]), np.array([linacc_x]), np.array([linacc_y]), _get_one_hot(conds[i],soft_class=False,class_num=3))
             # Write
             writer.write(example.SerializeToString())
 
@@ -75,20 +89,31 @@ def _get_stats(label_info):
 
     return ang_z, linacc_x, linacc_y
 
-def _get_one_hot(command):
+def _get_one_hot(command, soft_class=False, class_num=3):
     if not isinstance(command, int):
         command = int(command)
 
-    one_hot = np.zeros([4,])
-    one_hot[command-2] = 1
+    one_hot = np.zeros([class_num,])
+    if soft_class:
+      if command == 0:
+        one_hot[command] = 0.8
+        one_hot[command+1] = 0.2
+      elif command == class_num -1:
+        one_hot[command] = 0.8
+        one_hot[command-1] = 0.2
+      else:
+        one_hot[command] = 0.8
+        one_hot[command-1] = one_hot[command+1] = 0.1
+    else:
+      one_hot[command] = 1
 
-    return one_hot
+    return one_hot.astype(np.float32)
 
 
 def _make_tfexample(image, steering, ang_z, linacc_x, linacc_y, command):
     return tf.train.Example(features=tf.train.Features(feature={
             'image_raw': _bytes_features(tf.compat.as_bytes(image.tostring())),
-            'label/steer': _float_features(steering),
+            'label/steer': _bytes_features(tf.compat.as_bytes(steering.tostring())),
             'measures/ang_z': _float_features(ang_z),
             'measures/linacc_x': _float_features(linacc_x),
             'measures/linacc_y': _float_features(linacc_y),
@@ -232,7 +257,7 @@ def pixel_da(dataset_name, split_name, tfrecord_dir, batch_size, config=None):
     return image_batch, label_batch
 
 
-def da_cil(dataset_name, split_name, tfrecord_dir, batch_size, config=None):
+def da_cil(dataset_name, split_name, tfrecord_dir, batch_size, config=None, args=None):
     tfrecord_path = os.path.join(os.getcwd(), tfrecord_dir, '%s_%s.tfrecord' % (dataset_name, split_name))
     if not isinstance(tfrecord_path, (tuple, list)):
         tfrecord_path = [tfrecord_path]
@@ -285,8 +310,11 @@ def da_cil(dataset_name, split_name, tfrecord_dir, batch_size, config=None):
         image = tf.clip_by_value(image, 0, 1.0)
         image -= 0.5
         image *= 2
-    
-        images, labels, angzs, linxs, linys, commands = tf.train.shuffle_batch([image,label,angz,linx,liny,command],batch_size=batch_size, capacity=10*batch_size, num_threads=4, min_after_dequeue=batch_size)
+   
+        if args.convert_data:
+          images, labels, angzs, linxs, linys, commands = tf.train.batch([image,label,angz,linx,liny,command],batch_size=batch_size, capacity=10*batch_size, num_threads=4)
+        else: 
+          images, labels, angzs, linxs, linys, commands = tf.train.shuffle_batch([image,label,angz,linx,liny,command],batch_size=batch_size, capacity=10*batch_size, num_threads=4, min_after_dequeue=batch_size)
    
         generator_type = config.get('generator', 'type')
         if generator_type == 'UNET':
