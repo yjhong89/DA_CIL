@@ -67,18 +67,18 @@ class generator(object):
                     # 2,2
                     layer_index += 1
                     # Middle point of total architecture(number of total layers=16)
-                    #e8 = op.conv2d(tf.nn.relu(e7), out_channel=self.channel*8, name='conv2d_%d'%layer_index, activation=False, normalization=normalize_func)
+                    e8 = op.conv2d(tf.nn.relu(e7), out_channel=self.channel*8, name='conv2d_%d'%layer_index, activation=False, normalization=normalize_func)
                     # 1,1
-                    #layer_index += 1
+                    layer_index += 1
                 
                 # U-Net architecture is with skip connections between each layer i in the encoer and layer n-i in the decoder. Concatenate activations in channel axis
                 # Dropout with 0.5
                 with tf.variable_scope('decoder'):
-                    #d1 = op.transpose_conv2d(tf.nn.relu(e8), out_channel=self.channel*8, name='transpose_conv2d_%d'%layer_index, activation=False, dropout=True, normalization=normalize_func)
-                    #d1 = tf.concat([d1, e7], axis=3)
+                    d1 = op.transpose_conv2d(tf.nn.relu(e8), out_channel=self.channel*8, name='transpose_conv2d_%d'%layer_index, activation=False, dropout=True, normalization=normalize_func)
+                    d1 = tf.concat([d1, e7], axis=3)
                     # 2,2
-                    #layer_index += 1
-                    d2 = op.transpose_conv2d(tf.nn.relu(e7), out_channel=self.channel*8, name='transpose_conv2d_%d'%layer_index, activation=False, dropout=True, normalization=normalize_func)
+                    layer_index += 1
+                    d2 = op.transpose_conv2d(tf.nn.relu(d1), out_channel=self.channel*8, name='transpose_conv2d_%d'%layer_index, activation=False, dropout=True, normalization=normalize_func)
                     d2 = tf.concat([d2, e6], axis=3)
                     # 4,4
                     layer_index += 1

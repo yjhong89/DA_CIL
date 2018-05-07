@@ -128,9 +128,9 @@ class model():
 
         with tf.name_scope('task'):
             self.task_loss, _ = losses.task_classifier_loss(steer, command, self.end)
-            self.summary['task_loss'] = self.classification_loss
+            self.summary['task_loss'] = self.task_loss
             if self.t2s_task:
                 self.t2s_task_loss, _ = losses.task_classifier_loss(steer, command, self.t2s_end)
-                self.summary['t2s_task_loss'] = self.t2s_classification_loss
+                self.summary['t2s_task_loss'] = self.t2s_task_loss
 
         

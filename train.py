@@ -100,11 +100,11 @@ def train(sess, args, config):
                 discriminator_loss = da_model.task_loss
                 da_model.summary['discriminator_loss'] = discriminator_loss
             else:
-                generator_loss = s2t_cyclic_weight * da_model.s2t_cyclic_loss + t2s_cyclic_weight * da_model.t2s_cyclic_loss + s2t_adversarial_weight * da_model.s2t_adversarial_loss[0] + t2s_adversarial_weight * da_model.t2s_adversarial_loss[0]
+                generator_loss = s2t_cyclic_weight * da_model.s2t_cyclic_loss + t2s_cyclic_weight * da_model.t2s_cyclic_loss + da_model.s2t_adversarial_loss[0] + da_model.t2s_adversarial_loss[0]
+                generator_loss += s2t_style_weight * da_model.s2t_style_loss + t2s_style_weight * da_model.t2s_style_loss
                 da_model.summary['generator_loss'] = generator_loss
 
                 discriminator_loss = s2t_adversarial_weight * da_model.s2t_adversarial_loss[1] + t2s_adversarial_weight * da_model.t2s_adversarial_loss[1] + s2t_task_weight * da_model.task_loss 
-                discriminator_loss += s2t_style_weight * da_model.s2t_style_loss + t2s_style_weight * da_model.t2s_style_loss
                 if t2s_task:
                     discriminator_loss += t2s_task_weight * da_model.t2s_task_loss 
                 da_model.summary['discriminator_loss'] = discriminator_loss
@@ -115,7 +115,8 @@ def train(sess, args, config):
             mask_image_batch = source_image_batch[:,:,:,3]
             source_image_batch = source_image_batch[:,:,:,:3]
             if config.getboolean(model_type, 'input_mask'):
-                mask_images = tf.to_float(tf.greater(mask_image_batch, 0.99))
+                tf.logging.info('Using masked input')
+                mask_images = tf.to_float(tf.greater(mask_image_batch, 0.9))
                 source_image_batch = tf.multiply(source_image_batch, tf.tile(tf.expand_dims(mask_images, 3), [1,1,1,3])) 
                 
             # Label is already an 1-hot labels, but we expect categorical
@@ -130,7 +131,8 @@ def train(sess, args, config):
         with tf.name_scope(model_type + '_objectives'):
             da_model.create_objective(source_head_label_batch, source_lateral_label_batch, adversarial_mode)
 
-            generator_loss = s2t_cyclic_weight * da_model.s2t_cyclic_loss + t2s_cyclic_weight * da_model.t2s_cyclic_loss + s2t_adversarial_weight * da_model.s2t_adversarial_loss[0] + t2s_adversarial_weight * da_model.t2s_adversarial_loss[0]
+            generator_loss = s2t_cyclic_weight * da_model.s2t_cyclic_loss + t2s_cyclic_weight * da_model.t2s_cyclic_loss + da_model.s2t_adversarial_loss[0] + da_model.t2s_adversarial_loss[0]
+            generator_loss += s2t_style_weight * da_model.s2t_style_loss + t2s_style_weight * da_model.t2s_style_loss
             da_model.summary['generator_loss'] = generator_loss
 
             discriminator_loss = s2t_adversarial_weight * da_model.s2t_adversarial_loss[1] + t2s_adversarial_weight * da_model.t2s_adversarial_loss[1] + s2t_task_weight * da_model.transferred_task_loss 

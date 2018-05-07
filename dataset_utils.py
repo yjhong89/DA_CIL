@@ -318,7 +318,7 @@ def da_cil(dataset_name, split_name, tfrecord_dir, batch_size, config=None, args
    
         generator_type = config.get('generator', 'type')
         if generator_type == 'UNET':
-            images = tf.image.resize_images(images, [128, 128])
+            images = tf.image.resize_images(images, [256, 256])
         else:
             images = tf.image.resize_images(images, [96, 96])
         

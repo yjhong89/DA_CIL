@@ -27,6 +27,7 @@ def make_savedir(config):
     gen_type = config.get('generator', 'type')
     source_only = config.getboolean('config', 'source_only')
     t2s_task = config.getboolean('config', 't2s_task')
+    style_weights = config.getlist('discriminator', 'style_weights')
 
     result = model_type + '_' + adversarial_mode + '_' + gen_type
 
@@ -38,6 +39,9 @@ def make_savedir(config):
 
     if t2s_task:
         result += '_t2s_task'
+
+    if sum([float(y) for y in style_weights]) != 0:
+        result += '_style'
 
     if patch:
         result += '_patch'
