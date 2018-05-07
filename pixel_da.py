@@ -12,14 +12,17 @@ class model():
         model_name = config.get('config', 'experiment') 
         discriminator_channel = config.getint('discriminator', 'channel')
         generator_channel = config.getint('generator', 'channel')
-        classifier_channel = config.getint('classifier', 'channel')
+        classifier_channel = config.getint('task', 'channel')
 
         self.generator_type = config.get('generator', 'type')
         self.generator_out_channel = config.getint('generator', 'out_channel')
         self.generator = modules.generator(generator_channel, config, self.args)
         self.discriminator = modules.discriminator(discriminator_channel, group_size=self.args.batch_size)
-        
-        self.style_weights = config.getlist('pixel_da', 'style_weights')
+        self.patch = config.getboolean('discriminator', 'patch')
+        self.discriminator_dropout_prob = config.getfloat('discriminator', 'dropout_prob')    
+        self.t2s_task = config.getboolean('config', 't2s_task')            
+
+        self.style_weights = config.getlist('discriminator', 'style_weights')
 
         self.transferred_classifier = modules.task_classifier(classifier_channel, num_classes=3, training=self.args.training) 
 
@@ -53,15 +56,15 @@ class model():
 
         with tf.name_scope('discriminator'):
             # Patch discriminator
-            self.s2t_fake, self.s2t_fake_activations = self.discriminator(self.g_s2t[:,:,:,:3], name='D_S2T')
-            self.t2s_fake, self.t2s_fake_activations = self.discriminator(self.g_t2s[:,:,:,:3], name='D_T2S')
-
-            self.target_real, self.target_real_activations = self.discriminator(target, reuse=True, name='D_S2T')
-            self.source_real, self.source_real_activations = self.discriminator(source, reuse=True, name='D_T2S')
+            self.s2t_fake, self.s2t_fake_activations = self.discriminator(self.g_s2t[:,:,:,:3], name='D_S2T', dropout_prob=self.discriminator_dropout_prob, patch=self.patch)
+            self.t2s_fake, self.t2s_fake_activations = self.discriminator(self.g_t2s[:,:,:,:3], name='D_T2S', dropout_prob=self.discriminator_dropout_prob, patch=self.patch)
+    
+            self.target_real, self.target_real_activations = self.discriminator(target, reuse=True, name='D_S2T', dropout_prob=self.discriminator_dropout_prob, patch=self.patch)
+            self.source_real, self.source_real_activations = self.discriminator(source, reuse=True, name='D_T2S', dropout_prob=self.discriminator_dropout_prob, patch=self.patch)
 
         with tf.name_scope('classifier'):
             self.head_logits, self.lateral_logits = self.transferred_classifier(self.g_s2t, reuse_private=False, reuse_shared=False, shared='transferred_shared', private='transferred_private')  
-            if self.args.t2s_task:
+            if self.t2s_task:
                 self.t2s_head_logits, self.t2s_lateral_logits = self.transferred_classifier(self.g_t2s, reuse_private=False, reuse_shared=True, shared='transferred_shared', private='t2s_private')
 
             # Evaluation
@@ -79,16 +82,13 @@ class model():
         
         # Wasserstein with gradient-penalty
         with tf.name_scope('adversarial'):
-            if mode == 'FISHER':
-                self.s2t_g_loss, self.s2t_d_loss, self.s2t_alpha = losses.adversarial_loss(self.summary['target_image'], self.g_s2t, self.target_real, self.s2t_fake, mode=mode, discriminator=self.discriminator, discriminator_name='D_S2T')
-                self.t2s_g_loss, self.t2s_d_loss, self.t2s_alpha = losses.adversarial_loss(self.summary['source_image'], self.g_t2s, self.source_real, self.t2s_fake, mode=mode, discriminator=self.discriminator, discriminator_name='D_T2S')
-            else:
-                self.s2t_g_loss, self.s2t_d_loss = losses.adversarial_loss(self.summary['target_image'], self.g_s2t, self.target_real, self.s2t_fake, mode=mode, discriminator=self.discriminator, discriminator_name='D_S2T')
-                self.t2s_g_loss, self.t2s_d_loss = losses.adversarial_loss(self.summary['source_image'], self.g_t2s, self.source_real, self.t2s_fake, mode=mode, discriminator=self.discriminator, discriminator_name='D_T2S')
-            self.summary['s2t_g_loss'] = self.s2t_g_loss
-            self.summary['t2s_g_loss'] = self.t2s_g_loss
-            self.summary['s2t_d_loss'] = self.s2t_d_loss
-            self.summary['t2s_d_loss'] = self.t2s_d_loss            
+            self.s2t_adversarial_loss = losses.adversarial_loss(self.summary['target_image'], self.g_s2t, self.target_real, self.s2t_fake, mode=mode, discriminator=self.discriminator, discriminator_name='D_S2T')
+            self.t2s_adversarial_loss = losses.adversarial_loss(self.summary['source_image'], self.g_t2s, self.source_real, self.t2s_fake, mode=mode, discriminator=self.discriminator, discriminator_name='D_T2S')
+
+            self.summary['s2t_g_loss'] = self.s2t_adversarial_loss[0]
+            self.summary['t2s_g_loss'] = self.t2s_adversarial_loss[0]
+            self.summary['s2t_d_loss'] = self.s2t_adversarial_loss[1]
+            self.summary['t2s_d_loss'] = self.t2s_adversarial_loss[1]            
 
         with tf.name_scope('style'):
             self.s2t_style_loss = losses.style_loss(self.s2t_fake_activations, self.target_real_activations, self.style_weights)
@@ -98,9 +98,9 @@ class model():
 
         with tf.name_scope('task'):
             self.transferred_task_loss = losses.task_classifier_pixel_da_loss(head_labels, lateral_labels, self.head_logits, self.lateral_logits)
-            self.summary['classification_loss'] = self.transferred_task_loss
-            if self.args.t2s_task:
+            self.summary['task_loss'] = self.transferred_task_loss
+            if self.t2s_task:
                 self.t2s_task_loss = losses.task_classifier_pixel_da_loss(head_labels, lateral_labels, self.t2s_head_logits, self.t2s_lateral_logits)
-                self.summary['t2s_classification_loss'] = self.t2s_task_loss
+                self.summary['t2s_task_loss'] = self.t2s_task_loss
        
 

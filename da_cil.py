@@ -17,7 +17,8 @@ class model():
         branch_fc = config.getint('task', 'branch_fc')
 
         self.source_only = config.getboolean('config', 'source_only')
-        self.style_weights = config.getlist('config', 'style_weights')
+        self.t2s_task = config.getboolean('config', 't2s_task')
+        self.style_weights = config.getlist('discriminator', 'style_weights')
 
         self.share_all_image = config.getboolean('generator', 'share_all_image')
 
@@ -94,9 +95,8 @@ class model():
                 self.end, self.cnn = self.task(self.summary['source_image'], measurements)
             else:
                 self.end, _ = self.task(self.summary['source_transferred'], measurements)  
-                if self.args.t2s_task:
-                    channel_concat = tf.concat([self.g_t2s[:self.args.batch_size,:,:,:], self.g_t2s[self.args.batch_size:2*self.args.batch_size,:,:,:],self.g_t2s[2*self.args.batch_size:,:,:,:]], axis=3)
-                    self.t2s_end, _ = self.task(channel_concat, measurements, private='t2s_private', reuse_shared=True)
+                if self.t2s_task:
+                    self.t2s_end, _ = self.task(source, measurements, private='t2s_private', reuse_shared=True)
 
     def create_objective(self, steer, command, mode='FISHER'):
         if not self.source_only:
@@ -108,10 +108,8 @@ class model():
                     self.s2t_cyclic_loss = losses.cyclic_loss(self.source_concat, self.s2t2s)
                     self.t2s_cyclic_loss = losses.cyclic_loss(self.target_concat, self.t2s2t)
                     
-
                 self.summary['source_cyclic_loss'] = self.s2t_cyclic_loss
                 self.summary['target_cyclic_loss'] = self.t2s_cyclic_loss
-                
                     
             # Wasserstein with gradient-penalty
             with tf.name_scope('adversarial'):
@@ -129,10 +127,10 @@ class model():
                 self.summary['t2s_style_loss'] = self.t2s_style_loss
 
         with tf.name_scope('task'):
-            self.classification_loss, _ = losses.task_classifier_loss(steer, command, self.end)
-            self.summary['classification_loss'] = self.classification_loss
-            if self.args.t2s_task:
-                self.t2s_classification_loss, _ = losses.task_classifier_loss(steer, command, self.t2s_end)
-                self.summary['t2s_classification_loss'] = self.t2s_classification_loss
+            self.task_loss, _ = losses.task_classifier_loss(steer, command, self.end)
+            self.summary['task_loss'] = self.classification_loss
+            if self.t2s_task:
+                self.t2s_task_loss, _ = losses.task_classifier_loss(steer, command, self.t2s_end)
+                self.summary['t2s_task_loss'] = self.t2s_classification_loss
 
         

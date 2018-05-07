@@ -176,7 +176,7 @@ def _augmentation(image, config):
         if config.getboolean(section, 'noise'):
             image = tf.cond(
                 tf.random_uniform([], maxval=1.0) < prob,
-                    lambda: image + tf.truncated_normal(tf.shape(image)) * tf.random_uniform([], 0, 0.05),
+                    lambda: image + tf.truncated_normal(tf.shape(image)) * tf.random_uniform([], 0, 0.01),
                     lambda: image)
 
     return image
@@ -312,9 +312,9 @@ def da_cil(dataset_name, split_name, tfrecord_dir, batch_size, config=None, args
         image *= 2
    
         if args.convert_data:
-          images, labels, angzs, linxs, linys, commands = tf.train.batch([image,label,angz,linx,liny,command],batch_size=batch_size, capacity=10*batch_size, num_threads=4)
+            images, labels, angzs, linxs, linys, commands = tf.train.shuffle_batch([image,label,angz,linx,liny,command],batch_size=batch_size, capacity=10*batch_size, num_threads=4, min_after_dequeue=batch_size)
         else: 
-          images, labels, angzs, linxs, linys, commands = tf.train.shuffle_batch([image,label,angz,linx,liny,command],batch_size=batch_size, capacity=10*batch_size, num_threads=4, min_after_dequeue=batch_size)
+            images, labels, angzs, linxs, linys, commands = tf.train.batch([image,label,angz,linx,liny,command],batch_size=batch_size, capacity=10*batch_size, num_threads=4)
    
         generator_type = config.get('generator', 'type')
         if generator_type == 'UNET':

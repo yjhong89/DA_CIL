@@ -26,6 +26,7 @@ def make_savedir(config):
     patch = config.getboolean('discriminator', 'patch')
     gen_type = config.get('generator', 'type')
     source_only = config.getboolean('config', 'source_only')
+    t2s_task = config.getboolean('config', 't2s_task')
 
     result = model_type + '_' + adversarial_mode + '_' + gen_type
 
@@ -34,6 +35,9 @@ def make_savedir(config):
 
     if source_only:
         result = result + '_source_only'
+
+    if t2s_task:
+        result += '_t2s_task'
 
     if patch:
         result += '_patch'
@@ -66,9 +70,9 @@ def summarize(summary_set, t2s_option, source_only=False):
     t2s_style_loss_summary = tf.summary.scalar('t2s_style_loss', summary_set['t2s_style_loss'])
     s2t_d_loss_summary = tf.summary.scalar('s2t_d_loss', summary_set['s2t_d_loss'])
     t2s_d_loss_summary = tf.summary.scalar('t2s_d_loss', summary_set['t2s_d_loss'])
-    task_loss_summary = tf.summary.scalar('task_loss', summary_set['classification_loss'])
+    task_loss_summary = tf.summary.scalar('task_loss', summary_set['task_loss'])
     if t2s_option:
-        t2s_task_loss_summary = tf.summary.scalar('t2s_task_loss', summary_set['t2s_classification_loss'])
+        t2s_task_loss_summary = tf.summary.scalar('t2s_task_loss', summary_set['t2s_task_loss'])
     else:
         t2s_task_loss_summary = tf.summary.scalar('t2s_task_loss', 0)
     generator_loss_summary = tf.summary.scalar('generator_loss', summary_set['generator_loss'])

@@ -449,14 +449,15 @@ class task(object):
            
                         x = op.global_average_pooling(x)
         
-                        with tf.variable_scope('measurement_module'):
-                            y = op.fc(measurements, self.measurement_fc, dropout_ratio=self.dropout[fc_index], name='fc_%d'%fc_index)
-                            fc_index += 1    
-                            y = op.fc(y, self.measurement_fc, dropout_ratio=self.dropout[fc_index], name='fc_%d'%fc_index)
-                            fc_index += 1
+                        #with tf.variable_scope('measurement_module'):
+                        #    y = op.fc(measurements, self.measurement_fc, dropout_ratio=self.dropout[fc_index], name='fc_%d'%fc_index)
+                        #    fc_index += 1    
+                        #    y = op.fc(y, self.measurement_fc, dropout_ratio=self.dropout[fc_index], name='fc_%d'%fc_index)
+                        #    fc_index += 1
                             
                         with tf.variable_scope('joint'):
-                            joint = tf.concat([x,y], axis=-1, name='joint_representation')
+                            #joint = tf.concat([x,y], axis=-1, name='joint_representation')
+                            joint = x
                 
                         for i in range(self.num_commands):
                             with tf.variable_scope('branch_%d'%i):

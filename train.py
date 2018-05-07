@@ -49,6 +49,7 @@ def train(sess, args, config):
     log_dir = os.path.join(base_dir, config.get('config', 'logdir'))
     adversarial_mode = config.get('config', 'mode')
     whether_noise = config.getboolean('generator', 'noise')
+    t2s_task = config.getboolean('config', 't2s_task')
     noise_dim = config.getint('generator', 'noise_dim')
 
     source_only = config.getboolean('config', 'source_only')
@@ -84,28 +85,28 @@ def train(sess, args, config):
     
     if model_type == 'da_cil':
         with tf.name_scope(model_type + '_batches'):
-            source_image_batch, source_label_batch, source_measure_batch, source_command_batch = get_batches('source', 'train', tfrecord_dir, batch_size=args.batch_size, config=config)
+            source_image_batch, source_label_batch, source_measure_batch, source_command_batch = get_batches('source', 'train', tfrecord_dir, batch_size=args.batch_size, config=config, args=args)
     
         if source_only:
             da_model(source_image_batch, None, source_measure_batch)
         else:       
-            target_image_batch, _, _, _ = get_batches('target', 'train', tfrecord_dir, batch_size=args.batch_size, config=config)
+            target_image_batch, _, _, _ = get_batches('target', 'train', tfrecord_dir, batch_size=args.batch_size, config=config, args=args)
             da_model(source_image_batch, target_image_batch, source_measure_batch)
 
         with tf.name_scope(model_type + '_objectives'):
             da_model.create_objective(source_label_batch, source_command_batch, adversarial_mode)
 
             if source_only:
-                discriminator_loss = da_model.classification_loss
+                discriminator_loss = da_model.task_loss
                 da_model.summary['discriminator_loss'] = discriminator_loss
             else:
                 generator_loss = s2t_cyclic_weight * da_model.s2t_cyclic_loss + t2s_cyclic_weight * da_model.t2s_cyclic_loss + s2t_adversarial_weight * da_model.s2t_adversarial_loss[0] + t2s_adversarial_weight * da_model.t2s_adversarial_loss[0]
                 da_model.summary['generator_loss'] = generator_loss
 
-                discriminator_loss = s2t_adversarial_weight * da_model.s2t_adversarial_loss[1] + t2s_adversarial_weight * da_model.t2s_adversarial_loss[1] + s2t_task_weight * da_model.classification_loss 
+                discriminator_loss = s2t_adversarial_weight * da_model.s2t_adversarial_loss[1] + t2s_adversarial_weight * da_model.t2s_adversarial_loss[1] + s2t_task_weight * da_model.task_loss 
                 discriminator_loss += s2t_style_weight * da_model.s2t_style_loss + t2s_style_weight * da_model.t2s_style_loss
-                if args.t2s_task:
-                    discriminator_loss += t2s_task_weight * da_model.t2s_classification_loss 
+                if t2s_task:
+                    discriminator_loss += t2s_task_weight * da_model.t2s_task_loss 
                 da_model.summary['discriminator_loss'] = discriminator_loss
 
     elif model_type == 'pixel_da':
@@ -133,7 +134,7 @@ def train(sess, args, config):
             da_model.summary['generator_loss'] = generator_loss
 
             discriminator_loss = s2t_adversarial_weight * da_model.s2t_adversarial_loss[1] + t2s_adversarial_weight * da_model.t2s_adversarial_loss[1] + s2t_task_weight * da_model.transferred_task_loss 
-            if args.t2s_task:
+            if t2s_task:
                 discriminator_loss += t2s_task_weight * da_model.t2s_task_loss 
             da_model.summary['discriminator_loss'] = discriminator_loss
 
@@ -156,10 +157,10 @@ def train(sess, args, config):
         d_optim = _gradient_clip(name='discriminator', optimizer=d_optimizer, loss=discriminator_loss, global_steps=global_step, clip_norm=args.clip_norm)
        
     if not source_only:
-        generator_summary, discriminator_summary = utils.summarize(da_model.summary, args.t2s_task) 
+        generator_summary, discriminator_summary = utils.summarize(da_model.summary, t2s_task) 
         utils.config_summary(save_dir, s2t_adversarial_weight, t2s_adversarial_weight, s2t_cyclic_weight, t2s_cyclic_weight, s2t_task_weight, t2s_task_weight, discriminator_step, generator_step, adversarial_mode, whether_noise, noise_dim, s2t_style_weight, t2s_style_weight)
     else:
-        discriminator_summary = utils.summarize(da_model.summary, args.t2s_task, source_only)
+        discriminator_summary = utils.summarize(da_model.summary, t2s_task, source_only)
 
 
     saver = tf.train.Saver(max_to_keep=5)

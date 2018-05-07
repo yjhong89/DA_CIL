@@ -16,12 +16,11 @@ def main():
     parser.add_argument('-d', '--delete', action='store_true')
     parser.add_argument('-l', '--log', action='store_true')
     parser.add_argument('--config', default='config.ini')
-    parser.add_argument('--batch_size', type=int, default=32)
+    parser.add_argument('--batch_size', type=int, default=4)
     parser.add_argument('--clip_norm', type=float, default=5.0)
     parser.add_argument('--optimizer', type=str, default='adam')
     parser.add_argument('--training', type=utils.str2bool, default='t')
     parser.add_argument('--max_iter', type=int, default=400000)
-    parser.add_argument('--t2s_task', type=utils.str2bool, default='f')
     parser.add_argument('--pixel_norm', type=utils.str2bool, default='t')
     parser.add_argument('--learning_rate', type=float, default=0.0002)
     parser.add_argument('--lr_decay', type=utils.str2bool, default='n')
@@ -31,6 +30,7 @@ def main():
     parser.add_argument('--num_eval', type=int, default=100)
     parser.add_argument('--num_label', type=int, default=5)
     parser.add_argument('--print_info', type=utils.str2bool, default='n')
+    parser.add_argument('--convert_data', type=utils.str2bool, default='t')
 
     args = parser.parse_args()
     if args.log:
