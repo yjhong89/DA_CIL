@@ -405,7 +405,7 @@ class task(object):
                 with tf.variable_scope('image_module'):
                     with tf.variable_scope(private, reuse=reuse_private):
                         # [96, 96]
-                        x = op.conv2d(image, out_channel=self.channel, filter_size=7, stride=2, normalization=op._batch_norm, activation=tf.nn.relu, name='conv2d_%d'%image_layer_index)
+                        x = op.conv2d(image, out_channel=self.channel, filter_size=7, stride=2, normalization=op._group_norm, activation=tf.nn.relu, name='conv2d_%d'%image_layer_index)
                         image_layer_index += 1
 
                     with tf.variable_scope(shared, reuse=reuse_shared):
@@ -434,9 +434,9 @@ class task(object):
                             x = op.dilated_conv2d(x, out_channel=self.channel*8, filter_size=3, activation=tf.nn.relu, dilation_rate=2, normalization=op._group_norm, padding='SAME', name='conv2d_%d'%image_layer_index, training=self.training)
                             image_layer_index += 1
 
-                            x = op.conv2d(x, out_channel=self.channel*8, filter_size=3, stride=1, activation=tf.nn.relu, normalization=op._batch_norm, name='conv2d_%d'%image_layer_index, training=self.training)
+                            x = op.conv2d(x, out_channel=self.channel*8, filter_size=3, stride=1, activation=tf.nn.relu, normalization=op._group_norm, name='conv2d_%d'%image_layer_index, training=self.training)
                             image_layer_index += 1
-                            x = op.conv2d(x, out_channel=self.channel*8, filter_size=3, stride=1, activation=tf.nn.relu, normalization=op._batch_norm, name='conv2d_%d'%image_layer_index, training=self.training)
+                            x = op.conv2d(x, out_channel=self.channel*8, filter_size=3, stride=1, activation=tf.nn.relu, normalization=op._group_norm, name='conv2d_%d'%image_layer_index, training=self.training)
                             image_layer_index += 1
 
                         elif self.classifier_type == 'RESNET':
