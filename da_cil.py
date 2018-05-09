@@ -32,7 +32,7 @@ class model():
             self.generator = modules.generator(generator_channel, config, args)
             self.discriminator = modules.discriminator(discriminator_channel, group_size=1)
         # List of 4 branch modules
-        self.task = modules.task(task_channel, image_fc, measurement_fc, branch_fc, self.args.training, task_module_type) 
+        self.task = modules.task(task_channel, image_fc, measurement_fc, branch_fc, self.args.training, classifier_type=task_module_type) 
 
         self.summary = dict()
 
