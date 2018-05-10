@@ -5,6 +5,7 @@ import configparser
 import dataset_utils
 import inspect
 import math
+import scipy.misc
 
 class MyConfigParser(configparser.ConfigParser):
     def getlist(self, section, option):
