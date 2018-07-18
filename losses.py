@@ -120,7 +120,7 @@ def style_loss(fake_activations, real_activations, weights):
         assert fake_N == real_N
         assert fake_batch_num == real_batch_num
 
-        loss = (1.0 / ((fake_batch_num**2) * (fake_N**2))) * tf.reduce_sum(tf.square(fake_gram - real_gram))
+        loss = (1.0 / ((fake_batch_num*real_batch_num) * (fake_N*real_N))) * tf.reduce_sum(tf.square(fake_gram - real_gram))
 
         total_loss += float(weights[i]) * loss
 
